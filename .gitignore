@@ -103,5 +103,5 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-*/em 
-*/om
+*/em/
+*/om/
