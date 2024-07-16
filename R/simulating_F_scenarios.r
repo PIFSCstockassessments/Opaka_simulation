@@ -207,6 +207,7 @@ matplot(x=seq(1,100,1),t(Edat_var.05),type='l',ylim=c(0,0.2),xlab="",ylab="Fishi
 legend('topleft',legend="F SD = .05",bty='n', cex = 1.5)
 matplot(x=seq(1,100,1),t(Edat_var.1),type='l',ylim=c(0,0.2),xlab="",ylab="Fishing mortality", lwd = 3,cex.lab=1.5,cex.axis=1.5)
 legend('topleft',legend="F SD = .1",bty='n', cex = 1.5)
+legend('topright', legend = seq(1,10), lty = 1, col = 1:10)
 
 Edat_all <- t(rbind(Edat[c(2,5,9),], Edat_var.01[c(1,2,6),], Edat_var.05[c(6,4,10),], Edat_var.1[c(6,1,9),]))
 matplot(x=seq(1,100,1),Edat_all,type='l',ylim=c(0,0.2),xlab="",ylab="Fishing mortality", lwd = 3,cex.lab=1.5,cex.axis=1.5)

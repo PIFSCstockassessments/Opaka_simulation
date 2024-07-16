@@ -30,7 +30,7 @@ forecast$Nforecastyrs <- 0
 forecast$Forecast <- 0
 SS_writeforecast(forecast, dir = om.dir, overwrite = TRUE)
 
-files. <- c("data.ss", "control.ss", "ss.exe", "forecast.ss", "starter.ss")
+files. <- c("data_updated.ss", "control.ss", "ss.exe", "forecast.ss", "starter.ss")
 file.copy(file.path(om.dir, files.), dir.mcmc, overwrite = TRUE)
 
 ### create new folders

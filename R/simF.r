@@ -68,4 +68,32 @@ getSeasonFrate<-function(Fsim=Fsim,nAnnualFrate=nyears){
 #  dev.off() 
 
 
- 
+#*  F vector ----
+#' @param amplitutde the height from trough to peak of wave
+#' @param period distance from one trough to the next (or peak to peak)
+#' @param shift distance shifted from y-axis
+#' @param nyears number of years for vector
+#' @param low 
+#' @param high
+#' @param Esd inter-annual variability
+
+sin_func <- function(amplitude=1, period = 2*pi, shift = 0, 
+                     nyears = 100, low = 0, high = 2*pi, Esd = 0.1){
+  range = seq(low, high, length.out = nyears)
+  fsin <- amplitude*sin((2*pi/period)*(range+shift))
+
+  Emu<--0.5*Esd^2
+  Eerr<- exp(rnorm(nyears,rep(Emu,nyears),rep(Esd,nyears)))
+  fsin <- fsin*Eerr
+
+  return(fsin)
+}
+
+first_part <- sin_func(nyears = 40, low = 3*pi/2, high = 3*pi)
+second_part <- sin_func(nyears = 36, low = pi, amplitude = 0.5)[2:36]
+fsin <- scales::rescale(c(first_part, second_part), to = c(0.01,0.25))
+
+plot(x = seq(1,75), y = fsin, type = "l")
+
+first_part <- sin_func(nyears = 75, low = 3*pi/2, high = 3*pi)
+plot(x = seq(1,75), y = first_part)
