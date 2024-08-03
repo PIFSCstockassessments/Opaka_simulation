@@ -235,34 +235,35 @@ F_noncomm <- rep$exploitation$Non_comm
 
 F3 <- list(
   years = list(1:75, 1:75),
-  fleets = c(1, 3), 
-  fvals = list(F_frs, F_noncomm)
+  fleets = c(1, 2), 
+  fvals = list(F_vec_mat[i,], F_noncomm)
 )
 
 index3 <- list(
-  fleets = c(1,2,4), years = list(seq(1, 75, by = 1), seq(69, 75, by = 1), seq(69, 75, by =1)),
-  seas = list(7,1,1), sds_obs = list(0.25, 0.25, 0.25)
+  fleets = c(1,3), years = list(seq(1, 75, by = 1), seq(69, 75, by = 1)),
+  seas = list(7,1), sds_obs = list(0.06, 0.25)
 )
 
 lcomp3 <- list(
-  fleets = c(2,4), Nsamp = list(45,45),
-  years = list(seq(69, 75, by = 1), seq(69, 75, by = 1))
+  fleets = c(3), Nsamp = list(45),
+  years = list(seq(69, 75, by = 1))
 )
 
 agecomp3 <- list(
-  fleets = c(2,4), Nsamp = list(45,45),
-  years = list(seq(69, 75, by = 1), seq(69, 75, by = 1))
+  fleets = c(3), Nsamp = list(45),
+  years = list(seq(69, 75, by = 1))
 )
 
 ss3sim_base(
-  iterations = 1,
-  scenarios = "08b-trueF-trans-cod", 
+  iterations = 1:10,
+  scenarios = "01-Fsin-mat-paka", 
   f_params = F3,
   index_params = index3,
   lcomp_params = lcomp3,
   agecomp_params = agecomp3,
   om_dir = om_dir,
-  em_dir = em_dir
+  em_dir = em_dir,
+  user_recdevs = rdevs_array[,1:10]
 )
 
 ## Modify original models to match the years in ss3sim model (instead of 1949-2023, 1-75)
@@ -289,13 +290,21 @@ ss3sim_base(
 # SS_writestarter(start, file.path(main.dir, "models", "01_original_model"), overwrite = TRUE)
 
 trueF_mods <- SSgetoutput(dirvec = c(
-    file.path(main.dir, "08b-trueF-trans-cod", "1", "om"),
-    file.path(main.dir, "08b-trueF-trans-cod", "1", "em"),
-    file.path(main.dir, "models", "02-no-size-comp"),
-    file.path(main.dir, "models", "01_original_model")
+    file.path(main.dir, "01-Fsin-mat-paka", "1", "om"),
+    file.path(main.dir, "01-Fsin-mat-paka", "1", "em"),
+    file.path(main.dir, "01-Fsin-mat-paka", "2", "om"),
+    file.path(main.dir, "01-Fsin-mat-paka", "2", "em"),
+    file.path(main.dir, "01-Fsin-mat-paka", "3", "om"),
+    file.path(main.dir, "01-Fsin-mat-paka", "3", "em"),
+    file.path(main.dir, "01-Fsin-mat-paka", "4", "om"),
+    file.path(main.dir, "01-Fsin-mat-paka", "4", "em"),
+    file.path(main.dir, "01-Fsin-mat-paka", "5", "om"),
+    file.path(main.dir, "01-Fsin-mat-paka", "5", "em")
 ))
 trueF_mods_sum <- SSsummarize(trueF_mods)
-SSplotComparisons(trueF_mods_sum, print = TRUE, legendlabels = c("OM", "EM", "No Size Comp", "Original"), plotdir = file.path(main.dir, "08b-trueF-trans-cod", "1"))
+SSplotComparisons(trueF_mods_sum)
+trueF_mods_sum$maxgrad
+
 # Tuned the rec dev adjustment bias and changed age selectivity pattern to 10 ----
 ss3sim_base(
   iterations = 1:5,
