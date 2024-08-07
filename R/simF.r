@@ -89,11 +89,11 @@ sin_func <- function(amplitude=1, period = 2*pi, shift = 0,
   return(fsin)
 }
 
-first_part <- sin_func(nyears = 40, low = 3*pi/2, high = 3*pi)
-second_part <- sin_func(nyears = 36, low = pi, amplitude = 0.5)[2:36]
-fsin <- scales::rescale(c(first_part, second_part), to = c(0.01,0.25))
+# first_part <- sin_func(nyears = 40, low = 3*pi/2, high = 3*pi)
+# second_part <- sin_func(nyears = 36, low = pi, amplitude = 0.5)[2:36]
+# fsin <- scales::rescale(c(first_part, second_part), to = c(0.01,0.25))
 
-plot(x = seq(1,75), y = fsin, type = "l")
+# plot(x = seq(1,75), y = fsin, type = "l")
 
-first_part <- sin_func(nyears = 75, low = 3*pi/2, high = 3*pi)
-plot(x = seq(1,75), y = first_part)
+# first_part <- sin_func(nyears = 75, low = 3*pi/2, high = 3*pi)
+# plot(x = seq(1,75), y = first_part)

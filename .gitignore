@@ -1,18 +1,21 @@
 
 ## ignore everything
 *
-
-## track these filetypes
-
+#Don't ignore basic files
+!.gitignore
+!README.md 
+## track SS input files filetypes
+!Model_Runs/*
 !*/*data.ss
 !*/*data_boot*.ss
 !*/control.ss
 !*/control.ss_new
 !*/forecast.ss
 !*/starter.ss
-
+## track code and inputs
 !R/*
+!*.r
 !*.R
-!*.r 
 !Inputs/*
 !*.qmd
+
