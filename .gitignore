@@ -4,6 +4,8 @@
 #Don't ignore basic files
 !.gitignore
 !README.md 
+#track directories so can recurse into them
+!*/ 
 ## track SS input files filetypes
 !Model_Runs/*
 !*/*data.ss

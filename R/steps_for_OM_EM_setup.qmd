@@ -1,0 +1,330 @@
+---
+title: "Creating the OMs"
+format: html
+---
+
+
+```{r}
+library(r4ss)
+library(tidyverse)
+main.dir <- this.path::here(.. = 1)
+source(file.path(main.dir, "R", "simF.r"))
+set.seed <- read.csv(file.path(main.dir, "Inputs", "setseed.csv"))
+niter <- 100
+```
+
+
+### Create vectors of values for OMs
+```{r}
+#Model estimated Fs
+rep <- SS_output(dir = file.path(main.dir, "models", "03-simplified-mod"))
+F_comm_mod <- rep$exploitation$Comm[-1]
+F_noncomm_mod <- rep$exploitation$Non_comm[-1]
+
+#create descreasing F trajectories
+# f_dec <- getFhist(nsim=10,Esd=0.1,nyears=75,dFmin=-0.2,dFmax=-0.1,bb=0.2,scale= 0.04)
+# f_dec_rescale <- apply(f_dec, 1, FUN = function(x)(scales::rescale(x, to = c(0.00958269, 0.08221600)))) #put on a similar scale to real F
+# png(filename = file.path(main.dir, "Model_Runs", "fid_example.png"),width=10,height=8,units="in",res=450,pointsize = 12)
+# matplot(x=seq(1,75,1),(f_dec_rescale),type='l',ylim=c(0,0.1),xlab="",ylab="Fishing mortality", lwd = 3,cex.lab=1.5,cex.axis=1.5, col = 1:10)
+# legend("topleft", legend = seq(1,10), col = 1:10, lty = 1, cex = 1.5)
+# dev.off()
+
+#create idc F trajectories
+# log_sd <- 0.2
+# sqrt(exp(log_sd**2)-1)
+first_part <- sin_func(nyears = 60, low = 3*pi/2, high = 3*pi, Esd = 0.2)
+second_part <- sin_func(nyears = 20, low = pi, amplitude = 0.5, Esd = 0.2)[2:16]
+F_comm <- scales::rescale(c(first_part, second_part), to = c(0.0101208, 0.0868887)) #put on a similar scale to real F
+# plot(x = seq(1,75), y = fsin, type = "l")
+u_vec <- c(rep(1.8, 26), rep(1.47, 29), rep(1.03, 20))
+F_noncomm <- u_vec * F_comm
+#png(filename = file.path(main.dir, "Model_Runs", "fidi_example.png"),width=10,height=8,units="in",res=450,pointsize = 12)
+plot(x = 1:75, y = F_comm, type = "l", ylim = c(0,0.15), ylab = "F", xlab = "Year")
+lines(x = 1:75, y = F_noncomm, col = "blue")
+lines(x = 1:75, y = F_comm_mod, lty = 2)
+lines(x = 1:75, y = F_noncomm_mod, col = "blue", lty = 2)
+legend("topleft", lty = c(1,1,2,2), col = c("black", "blue", "black", "blue"), legend = c("Commercial simulated", "Non-commercial simulated", "Commercial model", "Non-commerical model"))
+#dev.off()
+
+## creating multiple fsin vectors 
+F_vec_mat <- matrix(NA, nrow = niter, ncol = 75)
+for(i in 1:niter) {
+
+first_part <- sin_func(nyears = 60, low = 3*pi/2, high = 3*pi, Esd = 0.2)
+second_part <- sin_func(nyears = 20, low = pi, amplitude = 0.5, Esd = 0.2)[2:16]
+F_comm <- scales::rescale(c(first_part, second_part), to = c(0.0101208, 0.0868887)) 
+
+F_vec_mat[i,] <- F_comm
+
+}
+#png(filename = file.path(main.dir, "Model_Runs", "fidi_example.png"),width=10,height=8,units="in",res=450,pointsize = 12)
+matplot(x = seq(1,75), y = t(F_vec_mat), type = "l", xlab = "Year", ylab = "F")
+#dev.off()
+#save(list = "F_vec_mat", file = file.path(main.dir, "Inputs", "Fsin_mat.RData"))
+load(file.path(main.dir, "Inputs", "Fsin_mat.RData"))
+```
+
+### Create rec dev timeseries
+
+```{r}
+
+sd_vec = c(0.52) #value from SS model  
+# set.seed(731)
+rdevs_array <- matrix(NA, nrow =75, ncol = niter) ## yrs x reps x sds
+for(r in 1:ncol(rdevs_array)){ 
+  # create single rep of correlated vectors given sd
+  rdev_faux  <- faux::rnorm_multi(n = nrow(rdevs_array), ## year vector
+                                 vars = 1,
+                                 mu = 0,
+                                 r = 1-1e-5,
+                                 sd = sd_vec)
+  rdevs_array[,r] <- rdev_faux$X1
+                                 
+ 
+}
+#png(file.path(main.dir, "Model_Runs", '2024-07-15-rdevs_array-100y.png'), height = 8, width =8, unit = 'in', res =400)
+matplot(x = seq(1,75), y = rdevs_array, type = "l", lty = 1, lwd = 1.2)
+abline(h = 0)
+#dev.off()
+round(mean(apply(rdevs_array,2,sd)),2) #check that SD makes sense
+#save(list = "rdevs_array", file = file.path(main.dir, "Inputs", "recdevs_mat.RData"))
+load(file.path(main.dir, "Inputs", "recdevs_mat.RData"))
+```
+
+### Create an OM and EM directories
+```{r}
+#| eval: false
+iterations <- seq(1, niter, by = 1)
+dir.it.om <- paste0(main.dir, "/Model_Runs/fidi/OM_", iterations)
+sapply(dir.it.om, dir.create)
+dir.it.em <- paste0(main.dir, "/Model_Runs/fidi/EM_", iterations)
+sapply(dir.it.em, dir.create)
+
+```
+
+### Creating scenario variables
+
+```{r}
+#steepness
+h_vec <- c(0.5, 0.76, 0.85)
+#unreported catch ratios 
+u_vec <- c(rep(1.8, 26), rep(1.47, 29), rep(1.03, 20))
+##TODO: sampling vectors for catch, index, length and age comp data 
+```
+
+### Create starting OM and EMs
+
+```{r}
+
+for(I in 1:niter){
+    # Get F-vector 
+    F_noncomm <- u_vec * F_vec_mat[I,]
+    F_list <- list(
+        years = list(1:75, 1:75),
+        fleets = c(1, 2), 
+        fvals = list(F_vec_mat[I,], F_noncomm)
+        )
+    #create sampling scheme for indices of abundance
+    index <- list(
+        fleets = c(1,3), years = list(seq(1, 75, by = 1), seq(69, 75, by = 1)),
+        seas = list(7,1), sds_obs = list(0.06, 0.25)
+        )
+    lcomp <- list(
+        fleets = c(3), Nsamp = list(45),
+        years = list(seq(69, 75, by = 1))
+        )
+
+    agecomp <- list(
+        fleets = c(3), Nsamp = list(45),
+        years = list(seq(69, 75, by = 1))
+        )
+
+    ss3sim_base(
+        iterations = I,
+        scenarios = "01-Fsin-mat-paka", 
+        f_params = F_list,
+        index_params = index,
+        lcomp_params = lcomp,
+        agecomp_params = agecomp,
+        om_dir = om_dir,
+        em_dir = em_dir,
+        user_recdevs = as.matrix(rdevs_array[,I])
+        )
+
+}
+
+
+
+```
+
+
+
+### DEPRECATED: Loop to create OM and EMs
+Maybe want to break this up so that creating the OMs first, then can create the EMs and sampling strategies. Especially for running on OSG, it will be better to have starting OMs and maybe EMs done already then can run the rest of simulation (feedback loop or just multiple scenarios)
+```{r}
+#| eval: false
+file.list <- c("data.ss", "control.ss_new", "forecast.ss", "starter.ss", "ss_opt_win.exe")
+for(i in 2:niter){
+    om.dir <- dir.it.om[i]
+    em.dir <- dir.it.em[i]
+
+file.copy(file.path(main.dir, "models", "03-simplified-mod", "OM", file.list), om.dir, overwrite = TRUE) 
+file.copy(file.path(main.dir, "models", "03-simplified-mod", "EM", file.list), em.dir, overwrite = TRUE)
+
+## Start creating OM per iteration 
+ss3sim::change_rec_devs(rdevs_array[-1,i], file.path(om.dir, "control.ss_new"), ctl_file_out = file.path(om.dir, "control.ss_new"))
+
+dat <- r4ss::SS_readdat(
+    file.path(om.dir, "data.ss"),
+    verbose = FALSE
+    )
+ctl <- r4ss::SS_readctl(
+    file.path(om.dir, "control.ss_new"),
+    verbose = FALSE, use_datlist = TRUE, datlist = dat
+    )
+
+F_noncomm <- u_vec * F_vec_mat[i,]
+
+ctl$F_Method <- 2
+newctl <- ss3sim::change_f(years = list(1:75,1:75), fleets = c(1,2), fvals = list(F_vec_mat[i,], F_noncomm), ctl_list = ctl)
+newctl$SR_parms$INIT[2] <- h_vec[2]
+newctl$age_selex_types$Pattern <- 10
+SS_writectl_3.30(newctl, outfile = file.path(om.dir, "control.ss"), overwrite = TRUE)
+
+dat$catch$catch <- ifelse(dat$catch$catch == 0, 0, dat$catch$catch/dat$catch$catch)
+##add dummy data for age comps
+dat$agebin_vector <- seq(1,21)
+dat$N_agebins <- length(dat$agebin_vector)
+dat$N_ageerror_definitions <- 1
+dat$ageerror <- matrix(data = c(rep(-1, 44), rep(0.001, 44)), nrow = 2, byrow = T)
+dat$age_info <- data.frame("mintailcomp" = rep(-1,3), "addtocomp" = rep(1e-10,3), "combine_M_F" = 0, "CompressBins" = 0, "CompError" = 0, "ParmSelect" = 0, "minsamplesize" = 1)
+dat$Lbin_method <- 3
+dat$agecomp <- data.frame("Yr" = seq(1,75),
+"Seas" = 1,
+"FltSvy" = rep(3, 75),
+"Gender" = 0,
+"Part" = 0,
+"Ageerr" = 1,
+"Lbin_lo" = -1,
+"Lbin_hi" = -1,
+"Nsamp" = 10)
+agecomp_mat <- as.data.frame(matrix(data = 1, nrow = nrow(dat$agecomp), ncol = dat$N_agebins))
+dat$agecomp <- as.data.frame(cbind(dat$agecomp, agecomp_mat))
+##add rows for earlier data for length comps 
+xtra_lencomp <- data.frame("Yr" = seq(1,68),
+"Seas" = 1,
+"FltSvy" = rep(3, 68),
+"Gender" = 0,
+"Part" = 0,
+"Nsamp" = 10)
+lencomp_mat <-  as.data.frame(matrix(data = 1, nrow = nrow(xtra_lencomp), ncol = dat$N_lbins))
+colnames(lencomp_mat) <- paste0("l", dat$lbin_vector)
+xtra_lencomp <- cbind(xtra_lencomp, lencomp_mat)
+dat$lencomp <- dat$lencomp %>% 
+bind_rows(xtra_lencomp) %>% 
+mutate(Seas = abs(Seas), FltSvy = abs(FltSvy)) %>% 
+group_by(FltSvy) %>% 
+arrange(Yr, FltSvy, .by_group = T) %>% 
+as.data.frame()
+SS_writedat_3.30(dat, outfile = file.path(om.dir, "data.ss"), overwrite = TRUE)
+
+start <- SS_readstarter(file.path(om.dir, "starter.ss"))
+start$datfile <- "data.ss"
+start$ctlfile <- "control.ss"
+start$run_display_detail <- 0
+start$prior_like <- 0
+start$last_estimation_phase <- 0
+start$MCMCburn <- 0
+start$MCMCthin <- 1
+start$seed <- set.seed[1,1]
+start$N_bootstraps <- 2
+SS_writestarter(start, dir = om.dir, overwrite = TRUE)
+#run ss to generate expected values for data
+r4ss::run(dir = om.dir, exe = "ss_opt_win", extras = "-nohess", skipfinished = F)
+## End of creating OM per iteration
+
+## Start creating EMs per iteration
+dat_exp <- SS_readdat_3.30(file.path(om.dir, "data_expval.ss"))
+dat_samp <- ss3sim::sample_index(dat_exp, fleets = c(1,3), years = list(seq(1,75), seq(69,75)),
+sds_obs = list(0.06, 0.25), seas = list(7,7))
+dat_samp <- ss3sim::sample_catch(dat_samp) ##TODO: need to use u_vec to put in values for non_comm catch
+dat_samp <- ss3sim::sample_lcomp(dat_samp, fleets = c(3), Nsamp = list(45), years = list(seq(69,75))) ##TODO: need to think more about Nsamp, cpar, and ESS
+dat_samp <- ss3sim::sample_agecomp(dat_samp, fleets = c(3), Nsamp = list(45), years = list(seq(69,75))) 
+SS_writedat_3.30(dat_samp, outfile = file.path(em.dir, "data.ss"), overwrite = TRUE)
+
+ctl.em <- SS_readctl_3.30(file.path(em.dir, "control.ss_new"), use_datlist = TRUE, datlist = file.path(em.dir, "data.ss"))
+#ctl.em$SR_parms #leave here as a reminder to change if needed if steepness is different
+SS_writectl_3.30(ctl.em, outfile = file.path(em.dir, "control.ss"), overwrite = TRUE)
+
+start <- SS_readstarter(file.path(em.dir, "starter.ss"))
+start$datfile <- "data.ss"
+start$ctlfile <- "control.ss"
+start$N_bootstraps <- 1
+SS_writestarter(start, dir = em.dir, overwrite = TRUE)
+
+r4ss::run(dir = em.dir, exe = "ss_opt_win", skipfinished = F)
+
+}
+
+mods <- SSgetoutput(dirvec = c(
+    dir.it.em[1],
+    dir.it.om[1]
+))
+mods_sum <- SSsummarize(mods, verbose = F)
+SSplotComparisons(mods_sum)
+SSplotComparisons(mods_sum, legendlabels = c("em1", "em2", "em3", "em4", "em5", "om1", "om2", "om3","om4", "om5"))
+length(which(mods_sum$maxgrad <= 1e-4))
+SSplotData(mods$replist1)
+SS_plots(mods$replist5)
+##TODO: make plots to compare length and age comps across all iterations
+mods_sum_sub <- SSsummarize(list(mods$replist2, mods$replist7))
+SSplotComparisons(mods_sum_sub, legendlabels = c("EM", "OM"))
+```
+
+
+
+```{r}
+dat_exp$CPUE %>% ggplot(aes(x = year, y = obs)) + geom_point() + facet_wrap(~index, scales = "free") + geom_line(data = dat_samp$CPUE, aes(x = year, y = obs), color = "blue") + geom_line(data = dat_samp2$CPUE, aes(x = year, y = obs), color ="orange")
+
+
+mods_sum$SpawnBio %>% 
+rename("em1" = "replist1",
+"em2" = "replist2",
+"em3" = "replist3",
+"em4" = "replist4",
+"em5" = "replist5", 
+"om1" = "replist6",
+"om2" = "replist7",
+"om3" = "replist8", 
+"om4" = "replist9",
+"om5" = "replist10") %>%
+pivot_longer(cols = -c("Label", "Yr")) %>%
+separate(col = "name", into = c("Model", "iteration"), sep = "m") %>%
+filter(Yr > 0) %>%
+ggplot() +
+geom_line(aes(x = Yr, y = value, group = interaction(iteration, Model), linetype = Model, color = Model), linewidth = 1.2) +
+scale_linetype_manual(labels = c("EM", "OM"), values = c(1,2)) +
+scale_color_manual(values = c(1,2), labels = c("EM", "OM")) +
+facet_wrap(~iteration) +
+theme_bw()
+
+
+rep <- SS_output(file.path(main.dir, "Model_Runs", "fidi", "EM_1"))
+SS_plots(rep)
+rep <- SS_output(file.path(main.dir, "models", "03-simplified-mod"))
+SS_plots(rep)
+
+
+head(mods_sum$indices)
+mods_sum$indices %>% 
+select(Fleet, Fleet_name, Yr, Obs, Exp, name) %>% 
+filter(str_detect(name, "replist1|replist6")) %>%
+filter(str_detect(name, "replist10", negate = T)) %>%
+ggplot(aes(x = Yr)) + 
+geom_point(data = . %>% filter(str_detect(name, "replist6")), aes(y = Exp)) +  #OM observed data
+geom_point(data = .%>% filter(str_detect(name, "replist1")), aes(y = Obs), color = "blue") +  #EM observed data
+geom_line(data = .%>% filter(str_detect(name, "replist1")), aes(y = Exp), color = "blue") + 
+facet_wrap(~Fleet_name, scales = "free") + theme_bw()
+
+```
+
