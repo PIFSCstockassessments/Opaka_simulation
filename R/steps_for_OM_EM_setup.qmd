@@ -11,7 +11,7 @@ library(ss3sim)
 main.dir <- this.path::here(.. = 1)
 source(file.path(main.dir, "R", "simF.r"))
 set.seed <- read.csv(file.path(main.dir, "Inputs", "setseed.csv"))
-niter <- 100
+niter <- 5
 ```
 
 
@@ -119,7 +119,10 @@ u_vec <- c(rep(1.8, 26), rep(1.47, 29), rep(1.03, 20))
 
 ```{r}
 
-for(I in 3:niter){
+#recdev0 <- matrix(data = 0, nrow = 75, ncol = niter)
+om_dir <- file.path(main.dir, "models", "opaka-om")
+em_dir <- file.path(main.dir, "models", "opaka-em")
+for(I in 1:niter){
     # Get F-vector 
     F_noncomm <- u_vec * F_vec_mat[I,]
     F_list <- list(
@@ -144,7 +147,7 @@ for(I in 3:niter){
 
     ss3sim_base(
         iterations = I,
-        scenarios = "01-Fsin-mat-paka", 
+        scenarios = "opaka-sim", 
         f_params = F_list,
         index_params = index,
         lcomp_params = lcomp,
@@ -161,42 +164,31 @@ for(I in 3:niter){
 
 ```{r}
 
-mods <- SSgetoutput(dirvec = c(
-    file.path(main.dir, "01-Fsin-mat-paka", "1", "om"),
-    file.path(main.dir, "01-Fsin-mat-paka", "1", "em"),
-    file.path(main.dir, "01-Fsin-mat-paka", "2", "om"),
-    file.path(main.dir, "01-Fsin-mat-paka", "2", "em"),
-    file.path(main.dir, "01-Fsin-mat-paka", "3", "om"),
-    file.path(main.dir, "01-Fsin-mat-paka", "3", "em"),
-    # file.path(main.dir, "01-Fsin-mat-paka", "4", "om"), 
-    # file.path(main.dir, "01-Fsin-mat-paka", "4", "em"), #model did not converge
-    file.path(main.dir, "01-Fsin-mat-paka", "5", "om"),
-    file.path(main.dir, "01-Fsin-mat-paka", "5", "em")
-))
-mods_sum <- SSsummarize(mods)
+get_results_all(overwrite_files = F,
+user_scenarios = "01-Fsin-mat-paka")
+
+results_ts <- read.csv(file.path(main.dir, "01-Fsin-mat-paka", "results_ts_01-Fsin-mat-paka.csv"))
+head(results_ts)
 
 ## Plot SB comparison between OM and EM
-mods_sum$SpawnBio %>% 
-rename("om1" = "replist1",
-"em1" = "replist2",
-"om2" = "replist3",
-"em2" = "replist4",
-"om3" = "replist5", 
-"em3" = "replist6",
-"om4" = "replist7",
-"em4" = "replist8") %>%
-pivot_longer(cols = -c("Label", "Yr")) %>%
-separate(col = "name", into = c("Model", "iteration"), sep = "m") %>%
-filter(Yr > 0) %>%
+results_ts %>%
+filter(year > 0) %>%
 ggplot() +
-geom_line(aes(x = Yr, y = value, group = interaction(iteration,Model), linetype = Model, color = Model), linewidth = 1.2) +
-scale_linetype_manual(labels = c("EM", "OM"), values = c(1,2)) +
-scale_color_manual(values = c("#F8766D", "#00BFC4"), labels = c("EM", "OM")) +
+geom_line(aes(x = year, y = SpawnBio, group = model_run, color = model_run), linewidth = 1.2) +
 facet_wrap(~iteration) +
 labs(x = "Year", y = "SSB") + 
 theme_bw()
 
-head(mods_sum$indices)
+#plot recdev comparisons
+results_ts %>% 
+ggplot(aes(x = year)) + 
+geom_hline(yintercept = 0, color = "grey50") + 
+geom_point(aes(y = rec_dev, color = model_run)) + 
+#scale_color_manual(values = c("#F8766D", "#00BFC4"), labels = c("EM", "OM")) +
+facet_wrap(~iteration) +
+labs(x = "Year", y = "Recruitment Deviations") +
+theme_bw()
+
 
 inds_reduced <- mods_sum$indices %>%
 mutate(name = recode(name, 
@@ -209,7 +201,15 @@ replist6 = "em3",
 # replist7 = "om4",
 # replist8 = "em4",
 replist7 = "om5",
-replist8 = "em5"
+replist8 = "em5",
+replist9 = "om6",
+replist10 = "em6",
+replist11 = "om7",
+replist12 = "em7",
+replist13 = "om8",
+replist14 = "em8",
+replist15 = "om9",
+replist16 = "em9"
 )) %>% 
 separate(col = "name", into = c("Model", "Iteration"), sep = "m") %>% 
 select(Fleet, Yr, Obs, Exp, Model, Iteration) 
@@ -217,8 +217,8 @@ select(Fleet, Yr, Obs, Exp, Model, Iteration)
 #plot CPUE comparison for commercial fleet
 inds_reduced %>%
 ggplot(aes(x = Yr)) + 
-geom_point(data = . %>% filter(Model == "o" & Fleet == 1), aes(y = Exp), alpha = .35, color = "#00BFC4") +
-geom_point(data = . %>% filter(Model == "e" & Fleet == 1), aes(y = Obs), alpha = .5, color = "#F8766D") +
+geom_point(data = . %>% filter(Model == "o" & Fleet == 1), aes(y = Exp), alpha = .65, color = "#00BFC4") +
+geom_point(data = . %>% filter(Model == "e" & Fleet == 1), aes(y = Obs), alpha = .65, color = "#F8766D") +
 geom_line(data = . %>% filter(Model == "e" & Fleet == 1), aes(y = Exp), color = "#F8766D") +
 facet_wrap(~Iteration) + 
 labs(x = "Year", y = "CPUE") +
@@ -227,31 +227,44 @@ theme_bw()
 #plot indices comparison for research fishing
 inds_reduced %>%
 ggplot(aes(x = Yr)) + 
-geom_point(data = . %>% filter(Model == "o" & Fleet == 3), aes(y = Exp), alpha = .75, color = "#00BFC4") +
-geom_point(data = . %>% filter(Model == "e" & Fleet == 3), aes(y = Obs), alpha = .5, color = "#F8766D") +
+geom_point(data = . %>% filter(Model == "o" & Fleet == 3), aes(y = Exp), alpha = .65, color = "#00BFC4") +
+geom_point(data = . %>% filter(Model == "e" & Fleet == 3), aes(y = Obs), alpha = 65, color = "#F8766D") +
 geom_line(data = . %>% filter(Model == "e" & Fleet == 3), aes(y = Exp), color = "#F8766D") +
 facet_wrap(~Iteration) + 
 labs(x = "Year", y = "Index") +
 theme_bw()
 
-mods_sum$Fvalue %>% 
-rename("om1" = "replist1",
-"em1" = "replist2",
-"om2" = "replist3",
-"em2" = "replist4",
-"om3" = "replist5", 
-"em3" = "replist6",
-"om4" = "replist7",
-"em4" = "replist8") %>%
-pivot_longer(cols = -c("Label", "Yr")) %>%
-separate(col = "name", into = c("Model", "iteration"), sep = "m") %>% 
-ggplot(aes(x = Yr, y = value)) + 
-geom_line(aes(color = Model, linetype = Model), linewidth =1.5) + 
-scale_linetype_manual(labels = c("EM", "OM"), values = c(1,2)) +
-scale_color_manual(values = c("#F8766D", "#00BFC4"), labels = c("EM", "OM")) +
-facet_wrap(~iteration) + theme_bw()
+results_ts %>% 
+ggplot(aes(x = year, y = F_1)) + 
+geom_line(aes(color = model_run), linewidth =1.5) + 
+facet_wrap(~iteration) + 
+labs(x = "Year", y = "Commercial Fishery F") + 
+theme_bw()
 
-SSplotComparisons(mods_sum, subplots = 11)
+results_ts %>% 
+ggplot(aes(x = year, y = F_2)) + 
+geom_line(aes(color = model_run), linewidth =1.5) + 
+facet_wrap(~iteration) + 
+labs(x = "Year", y = "Non-Commercial Fishery F") + 
+theme_bw()
+
+
+##Comparing OMs with simplified mods
+oms <- SSgetoutput(dirvec = c(
+    file.path(main.dir,"models","03-simplified-mod"),
+    file.path(main.dir,"opaka-sim-lencomp","1","om")
+    # file.path(main.dir,"01-Fsin-mat-paka","2","om"),
+    # file.path(main.dir,"01-Fsin-mat-paka","3","om"),
+    # file.path(main.dir,"01-Fsin-mat-paka","4","om"),
+    # file.path(main.dir,"01-Fsin-mat-paka","5","om"),
+    # file.path(main.dir,"01-Fsin-mat-paka","6","om"),
+    # file.path(main.dir,"01-Fsin-mat-paka","7","om"),
+    # file.path(main.dir,"01-Fsin-mat-paka","8","om"),
+    # file.path(main.dir,"01-Fsin-mat-paka","9","om"),
+    # file.path(main.dir,"01-Fsin-mat-paka","10","om")
+))
+om_sum <- SSsummarize(oms)
+SSplotComparisons(om_sum)
 ```
 
 
