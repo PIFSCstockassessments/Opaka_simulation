@@ -73,7 +73,7 @@ load(file.path(main.dir, "Inputs", "Fsin_mat.RData"))
 
 sd_vec = c(0.52) #value from SS model  
 # set.seed(731)
-rdevs_array <- matrix(NA, nrow =75, ncol = niter) ## yrs x reps x sds
+rdevs_array <- matrix(NA, nrow =125, ncol = niter) ## yrs x reps x sds
 for(r in 1:ncol(rdevs_array)){ 
   # create single rep of correlated vectors given sd
   rdev_faux  <- faux::rnorm_multi(n = nrow(rdevs_array), ## year vector
@@ -85,13 +85,13 @@ for(r in 1:ncol(rdevs_array)){
                                  
  
 }
-#png(file.path(main.dir, "Model_Runs", '2024-07-15-rdevs_array-100y.png'), height = 8, width =8, unit = 'in', res =400)
-matplot(x = seq(1,75), y = rdevs_array, type = "l", lty = 1, lwd = 1.2)
+# png(file.path(main.dir, "Model_Runs", '2024-08-12-rdevs_array-125yr.png'), height = 8, width =8, unit = 'in', res =400)
+matplot(x = seq(1,125), y = rdevs_array, type = "l", lty = 1, lwd = 1.2)
 abline(h = 0)
-#dev.off()
+# dev.off()
 round(mean(apply(rdevs_array,2,sd)),2) #check that SD makes sense
-#save(list = "rdevs_array", file = file.path(main.dir, "Inputs", "recdevs_mat.RData"))
-load(file.path(main.dir, "Inputs", "recdevs_mat.RData"))
+# save(list = "rdevs_array", file = file.path(main.dir, "Inputs", "recdevs_mat_125yrs.RData"))
+load(file.path(main.dir, "Inputs", "recdevs_mat_125yrs.RData"))
 ```
 
 ### Create an OM and EM directories
@@ -115,7 +115,9 @@ u_vec <- c(rep(1.8, 26), rep(1.47, 29), rep(1.03, 20))
 ##TODO: sampling vectors for catch, index, length and age comp data 
 ```
 
-### Create starting OM and EMs
+### Create starting OM and EMs for a scenario
+
+This loop can be run for each scenario to create the starting OM and EMs. To distinguish between sampling scenarios, change the `scenarios` argument in `ss3sim_base()`. 
 
 ```{r}
 
@@ -154,25 +156,95 @@ for(I in 1:niter){
         agecomp_params = agecomp,
         om_dir = om_dir,
         em_dir = em_dir,
-        user_recdevs = rdevs_array
+        user_recdevs = rdevs_array[1:75,]
         )
 
 }
 
+```
+
+## Adding 5 years of data to model 
+To start, I am adding 5 years of constant F to the starting OM. F is determined outside of the simulation loop but eventually, it will be derived from the previous EM and put into the next OM, then sampled with error for the EM. 
+
+```{r}
+n_yrs_fwd <- 5
+Iteration <- 1 #iteration
+##read in OM 
+om_dat <- SS_readdat_3.30(file = file.path(main.dir, "opaka-sim", Iteration, "om", "ss3.dat"))
+endyr <- om_dat$endyr
+new_endyr <- endyr+n_yrs_fwd
+
+##update recdevs
+om_ctl <- SS_readctl_3.30(file = file.path(main.dir, "opaka-sim", Iteration, "om", "om.ctl"), datlist = om_dat)
+
+om_ctl$MainRdevYrLast <- new_endyr
+om_ctl$last_yr_fullbias_adj <- new_endyr
+om_ctl$first_recent_yr_nobias_adj <- new_endyr
+om_ctl$N_Read_recdevs <- new_endyr
+om_ctl$recdev_input <- bind_rows(om_ctl$recdev_input, 
+data.frame(Year = seq(endyr+1, new_endyr), 
+recdev = rdevs_array[(endyr+1):new_endyr,Iteration]))
+
+## dataframe of new F to add to OM 
+new_f <- om_ctl$F_setup2 %>% 
+slice(rep(n(), each = n_yrs_fwd), .by = fleet) %>% 
+mutate(yr = rep(seq(endyr+1,new_endyr), 2)) %>%
+bind_rows(om_ctl$F_setup2) %>% 
+arrange(fleet, yr)
+F_comm <- new_f %>% filter(fleet == 1) %>% pull(Fvalue)
+F_non_comm <- new_f %>% filter(fleet == 2) %>% pull(Fvalue)
+newctl <- ss3sim::change_f(years = list(1:new_endyr,1:new_endyr), fleets = c(1,2), fvals = list(F_comm, F_non_comm), ctl_list = om_ctl)
+
+#save new ctl file
+SS_writectl(newctl, file.path(main.dir, "opaka-sim", Iteration, "om", "om.ctl"), overwrite = T)
+
+##add dummy data rows to data file
+om_dat$endyr <- new_endyr
+## catch
+om_dat$catch <- make_dummy_dat_catch(fleets = c(1,2), years = 1:new_endyr)
+## cpue
+om_dat$CPUE <- bind_rows(
+    make_dummy_dat_cpue(fleets = 1, years = 1:new_endyr, seas = 7),
+    make_dummy_dat_cpue(fleets = 3, years = 69:new_endyr, seas = 1)
+)
+## length comp 
+om_dat$lencomp <- bind_rows(
+        make_dummy_dat_lencomp(fleets = 1, years = c(76:new_endyr), len_bins = om_dat$lbin_vector, nsex = 1),
+        make_dummy_dat_lencomp(fleets = 3, years = c(69:new_endyr), len_bins = om_dat$lbin_vector, nsex = 1)
+    )
+## age comp 
+om_dat$agecomp <- bind_rows(
+        make_dummy_dat_agecomp(fleets = 1, years = c(76:new_endyr), age_bins = om_dat$agebin_vector, nsex = 1),
+        make_dummy_dat_agecomp(fleets = 3, years = c(69:new_endyr), age_bins = om_dat$agebin_vector, nsex = 1)
+    )
+#save new dat file
+SS_writedat(om_dat, file.path(main.dir, "opaka-sim", Iteration, "om", "ss3.dat"), overwrite = T)
+
+#run OM 
+r4ss::run(dir = file.path(main.dir, "opaka-sim", Iteration, "om"), exe = "ss", extras = "-nohess", skipfinished = F)
+
+
 
 ```
 
+
+## Get results from runs for model comparisons
 ```{r}
 
 get_results_all(overwrite_files = F,
-user_scenarios = "01-Fsin-mat-paka")
+user_scenarios = "opaka-sim")
 
-results_ts <- read.csv(file.path(main.dir, "01-Fsin-mat-paka", "results_ts_01-Fsin-mat-paka.csv"))
+results_ts <- read.csv(file.path(main.dir, "opaka-sim", "results_ts_opaka-sim.csv"))
 head(results_ts)
-
+results_dq <- read.csv(file.path(main.dir, "opaka-sim", "results_dq_opaka-sim.csv"))
+head(results_dq)
+results_scalar <- read.csv(file.path(main.dir, "opaka-sim", "results_scalar_opaka-sim.csv"))
+head(results_scalar)
+length(which(results_scalar$max_grad <= 1e-4))
+converged_its <- results_scalar[which(results_scalar$max_grad <= 1e-4),"iteration"]
 ## Plot SB comparison between OM and EM
 results_ts %>%
-filter(year > 0) %>%
+filter(year > 0 & iteration %in% converged_its) %>%
 ggplot() +
 geom_line(aes(x = year, y = SpawnBio, group = model_run, color = model_run), linewidth = 1.2) +
 facet_wrap(~iteration) +
@@ -181,44 +253,58 @@ theme_bw()
 
 #plot recdev comparisons
 results_ts %>% 
+filter(iteration %in% converged_its) %>%
 ggplot(aes(x = year)) + 
 geom_hline(yintercept = 0, color = "grey50") + 
 geom_point(aes(y = rec_dev, color = model_run)) + 
-#scale_color_manual(values = c("#F8766D", "#00BFC4"), labels = c("EM", "OM")) +
 facet_wrap(~iteration) +
 labs(x = "Year", y = "Recruitment Deviations") +
 theme_bw()
 
+#plot F comparisons
+results_dq %>% 
+filter(iteration %in% converged_its) %>%
+ggplot(aes(x = year, y = Value.F)) + 
+geom_line(aes(color = model_run), linewidth =1.5) + 
+facet_wrap(~iteration) + 
+labs(x = "Year", y = "F") + 
+theme_bw()
 
+mod_dirs <- c(paste(main.dir, "opaka-sim", 1:niter, "om", sep = "/"), paste(main.dir, "opaka-sim", 1:niter, "em", sep = "/"))
+mods <- SSgetoutput(dirvec = mod_dirs)
+mods_sum <- SSsummarize(mods)
 inds_reduced <- mods_sum$indices %>%
 mutate(name = recode(name, 
 replist1 = "om1",
-replist2 = "em1",
-replist3 = "om2",
-replist4 = "em2", 
-replist5 = "om3",
-replist6 = "em3",
-# replist7 = "om4",
-# replist8 = "em4",
-replist7 = "om5",
-replist8 = "em5",
-replist9 = "om6",
-replist10 = "em6",
-replist11 = "om7",
-replist12 = "em7",
-replist13 = "om8",
-replist14 = "em8",
-replist15 = "om9",
-replist16 = "em9"
+replist2 = "om2",
+replist3 = "om3",
+replist4 = "om4", 
+replist5 = "om5",
+replist6 = "om6",
+replist7 = "om7",
+replist8 = "om8",
+replist9 = "om9",
+replist10 = "om10",
+replist11 = "em1",
+replist12 = "em2",
+replist13 = "em3",
+replist14 = "em4", 
+replist15 = "em5",
+replist16 = "em6",
+replist17 = "em7",
+replist18 = "em8",
+replist19 = "em9",
+replist20 = "em10"
 )) %>% 
 separate(col = "name", into = c("Model", "Iteration"), sep = "m") %>% 
-select(Fleet, Yr, Obs, Exp, Model, Iteration) 
+select(Fleet, Yr, Obs, Exp, Model, Iteration) %>% 
+filter(Iteration %in% converged_its)
 
 #plot CPUE comparison for commercial fleet
 inds_reduced %>%
 ggplot(aes(x = Yr)) + 
-geom_point(data = . %>% filter(Model == "o" & Fleet == 1), aes(y = Exp), alpha = .65, color = "#00BFC4") +
-geom_point(data = . %>% filter(Model == "e" & Fleet == 1), aes(y = Obs), alpha = .65, color = "#F8766D") +
+geom_point(data = . %>% filter(Model == "o" & Fleet == 1), aes(y = Exp), color = "#00BFC4") +
+geom_point(data = . %>% filter(Model == "e" & Fleet == 1), aes(y = Obs), color = "#F8766D") +
 geom_line(data = . %>% filter(Model == "e" & Fleet == 1), aes(y = Exp), color = "#F8766D") +
 facet_wrap(~Iteration) + 
 labs(x = "Year", y = "CPUE") +
@@ -227,32 +313,17 @@ theme_bw()
 #plot indices comparison for research fishing
 inds_reduced %>%
 ggplot(aes(x = Yr)) + 
-geom_point(data = . %>% filter(Model == "o" & Fleet == 3), aes(y = Exp), alpha = .65, color = "#00BFC4") +
-geom_point(data = . %>% filter(Model == "e" & Fleet == 3), aes(y = Obs), alpha = 65, color = "#F8766D") +
+geom_point(data = . %>% filter(Model == "o" & Fleet == 3), aes(y = Exp), color = "#00BFC4") +
+geom_point(data = . %>% filter(Model == "e" & Fleet == 3), aes(y = Obs), color = "#F8766D") +
 geom_line(data = . %>% filter(Model == "e" & Fleet == 3), aes(y = Exp), color = "#F8766D") +
 facet_wrap(~Iteration) + 
 labs(x = "Year", y = "Index") +
 theme_bw()
 
-results_ts %>% 
-ggplot(aes(x = year, y = F_1)) + 
-geom_line(aes(color = model_run), linewidth =1.5) + 
-facet_wrap(~iteration) + 
-labs(x = "Year", y = "Commercial Fishery F") + 
-theme_bw()
-
-results_ts %>% 
-ggplot(aes(x = year, y = F_2)) + 
-geom_line(aes(color = model_run), linewidth =1.5) + 
-facet_wrap(~iteration) + 
-labs(x = "Year", y = "Non-Commercial Fishery F") + 
-theme_bw()
-
-
 ##Comparing OMs with simplified mods
 oms <- SSgetoutput(dirvec = c(
     file.path(main.dir,"models","03-simplified-mod"),
-    file.path(main.dir,"opaka-sim-lencomp","1","om")
+    file.path(main.dir,"opaka-sim","1","om")
     # file.path(main.dir,"01-Fsin-mat-paka","2","om"),
     # file.path(main.dir,"01-Fsin-mat-paka","3","om"),
     # file.path(main.dir,"01-Fsin-mat-paka","4","om"),
@@ -265,6 +336,10 @@ oms <- SSgetoutput(dirvec = c(
 ))
 om_sum <- SSsummarize(oms)
 SSplotComparisons(om_sum)
+
+em <- SS_output(dir = file.path(main.dir, "opaka-sim", "1", "em"))
+SS_plots(em)
+
 ```
 
 
@@ -390,50 +465,4 @@ mods_sum_sub <- SSsummarize(list(mods$replist2, mods$replist7))
 SSplotComparisons(mods_sum_sub, legendlabels = c("EM", "OM"))
 ```
 
-
-
-```{r}
-dat_exp$CPUE %>% ggplot(aes(x = year, y = obs)) + geom_point() + facet_wrap(~index, scales = "free") + geom_line(data = dat_samp$CPUE, aes(x = year, y = obs), color = "blue") + geom_line(data = dat_samp2$CPUE, aes(x = year, y = obs), color ="orange")
-
-
-mods_sum$SpawnBio %>% 
-rename("em1" = "replist1",
-"em2" = "replist2",
-"em3" = "replist3",
-"em4" = "replist4",
-"em5" = "replist5", 
-"om1" = "replist6",
-"om2" = "replist7",
-"om3" = "replist8", 
-"om4" = "replist9",
-"om5" = "replist10") %>%
-pivot_longer(cols = -c("Label", "Yr")) %>%
-separate(col = "name", into = c("Model", "iteration"), sep = "m") %>%
-filter(Yr > 0) %>%
-ggplot() +
-geom_line(aes(x = Yr, y = value, group = interaction(iteration, Model), linetype = Model, color = Model), linewidth = 1.2) +
-scale_linetype_manual(labels = c("EM", "OM"), values = c(1,2)) +
-scale_color_manual(values = c(1,2), labels = c("EM", "OM")) +
-facet_wrap(~iteration) +
-theme_bw()
-
-
-rep <- SS_output(file.path(main.dir, "Model_Runs", "fidi", "EM_1"))
-SS_plots(rep)
-rep <- SS_output(file.path(main.dir, "models", "03-simplified-mod"))
-SS_plots(rep)
-
-
-head(mods_sum$indices)
-mods_sum$indices %>% 
-select(Fleet, Fleet_name, Yr, Obs, Exp, name) %>% 
-filter(str_detect(name, "replist1|replist6")) %>%
-filter(str_detect(name, "replist10", negate = T)) %>%
-ggplot(aes(x = Yr)) + 
-geom_point(data = . %>% filter(str_detect(name, "replist6")), aes(y = Exp)) +  #OM observed data
-geom_point(data = .%>% filter(str_detect(name, "replist1")), aes(y = Obs), color = "blue") +  #EM observed data
-geom_line(data = .%>% filter(str_detect(name, "replist1")), aes(y = Exp), color = "blue") + 
-facet_wrap(~Fleet_name, scales = "free") + theme_bw()
-
-```
 
