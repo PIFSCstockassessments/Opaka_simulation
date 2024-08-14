@@ -303,9 +303,9 @@ get_fits_mod <- function(dir = getwd(), is_EM = NULL, is_OM = NULL) {
   if (!file.exists(file.path(dir, "Report.sso")) |
     file.size(file.path(dir, "Report.sso")) == 0) {
     fits_mod <- list(
-      scalar = NA,
-      timeseries = NA,
-      derived = NA
+      index = NA,
+      lencomp = NA,
+      agecomp = NA
     )
     return(fits_mod)
   }
@@ -334,7 +334,7 @@ get_fits_mod <- function(dir = getwd(), is_EM = NULL, is_OM = NULL) {
   }
   report <- r4ss::SS_output(file.path(dir),
     covar = FALSE, verbose = FALSE,
-    compfile = NULL, forecast = forecastTF, warn = FALSE,
+    forecast = forecastTF, warn = FALSE,
     readwt = FALSE, printstats = FALSE, NoCompOK = TRUE
   )
   ## Get dfs
@@ -414,11 +414,11 @@ get_fits_lcomp <- function(report.file){
     Exp_cols <- grep("Exp", colnames(report.file$lendbase))
     Nsamp_cols <- grep("Nsamp", colnames(report.file$lendbase))
     effN_cols <- grep("effN", colnames(report.file$lendbase))
-    Lbin_cols <- grep("Lbin_", colnames(report.file$lendbase))
+    Bin_cols <- grep("Bin", colnames(report.file$lendbase))
     SuprPer_cols <- grep("SuprPer", colnames(report.file$lendbase))
     other_cols <- which(colnames(report.file$lendbase) %in%
         c("Yr", "Area", "Seas", "Fleet"))
-    xx <- report.file$lendbase[, c(other_cols, Obs_cols, Exp_cols, Nsamp_cols,effN_cols,Lbin_cols,SuprPer_cols)]
+    xx <- report.file$lendbase[, c(other_cols, Obs_cols, Exp_cols, Nsamp_cols,effN_cols,Bin_cols,SuprPer_cols)]
     xx <- xx[xx$Yr %in% years, ]
     xx$year <- xx$Yr
     xx$Yr <- NULL
@@ -507,4 +507,15 @@ make_df <- function(list_name, list_df) {
   }
 
   df
+}
+
+add_colnames <- function(dfs, bind = FALSE, fillwith = NA) {
+  vars <- unique(unlist(lapply(dfs, base::names)))
+  newdfs <- lapply(dfs, function(x) {
+    missing <- setdiff(vars, names(x))
+    x[, missing] <- fillwith
+    return(x)
+  })
+  if (bind) newdfs <- do.call("rbind", newdfs)
+  return(newdfs)
 }
