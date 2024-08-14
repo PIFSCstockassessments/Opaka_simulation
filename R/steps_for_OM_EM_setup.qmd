@@ -10,6 +10,7 @@ library(tidyverse)
 library(ss3sim)
 main.dir <- this.path::here(.. = 1)
 source(file.path(main.dir, "R", "simF.r"))
+source(file.path(main.dir, "R", "make_dummy_dat.r"))
 set.seed <- read.csv(file.path(main.dir, "Inputs", "setseed.csv"))
 niter <- 5
 ```
@@ -17,6 +18,7 @@ niter <- 5
 
 ### Create vectors of values for OMs
 ```{r}
+#| eval: false
 #Model estimated Fs
 rep <- SS_output(dir = file.path(main.dir, "models", "03-simplified-mod"))
 #SS_plots(rep)
@@ -64,13 +66,12 @@ F_vec_mat[i,] <- F_comm
 matplot(x = seq(1,75), y = t(F_vec_mat), type = "l", xlab = "Year", ylab = "F")
 #dev.off()
 #save(list = "F_vec_mat", file = file.path(main.dir, "Inputs", "Fsin_mat.RData"))
-load(file.path(main.dir, "Inputs", "Fsin_mat.RData"))
 ```
 
 ### Create rec dev timeseries
 
 ```{r}
-
+#| eval: false
 sd_vec = c(0.52) #value from SS model  
 # set.seed(731)
 rdevs_array <- matrix(NA, nrow =125, ncol = niter) ## yrs x reps x sds
@@ -91,22 +92,16 @@ abline(h = 0)
 # dev.off()
 round(mean(apply(rdevs_array,2,sd)),2) #check that SD makes sense
 # save(list = "rdevs_array", file = file.path(main.dir, "Inputs", "recdevs_mat_125yrs.RData"))
+```
+
+### Load already created F-vectors and RecDev-vectors
+```{r}
+load(file.path(main.dir, "Inputs", "Fsin_mat.RData"))
 load(file.path(main.dir, "Inputs", "recdevs_mat_125yrs.RData"))
 ```
 
-### Create an OM and EM directories
-```{r}
-#| eval: false
-iterations <- seq(1, niter, by = 1)
-dir.it.om <- paste0(main.dir, "/Model_Runs/fidi/OM_", iterations)
-sapply(dir.it.om, dir.create)
-dir.it.em <- paste0(main.dir, "/Model_Runs/fidi/EM_", iterations)
-sapply(dir.it.em, dir.create)
-
-```
 
 ### Creating scenario variables
-
 ```{r}
 #steepness
 h_vec <- c(0.5, 0.76, 0.85)
@@ -121,7 +116,7 @@ This loop can be run for each scenario to create the starting OM and EMs. To dis
 
 ```{r}
 
-#recdev0 <- matrix(data = 0, nrow = 75, ncol = niter)
+#recdev0 <- matrix(data = 0, nrow = 75, ncol = niter) #for testing deterministic runs with no rec-devs
 om_dir <- file.path(main.dir, "models", "opaka-om")
 em_dir <- file.path(main.dir, "models", "opaka-em")
 for(I in 1:niter){
@@ -223,7 +218,47 @@ SS_writedat(om_dat, file.path(main.dir, "opaka-sim", Iteration, "om", "ss3.dat")
 #run OM 
 r4ss::run(dir = file.path(main.dir, "opaka-sim", Iteration, "om"), exe = "ss", extras = "-nohess", skipfinished = F)
 
+## Create new EM directory 
+new_EM_dir <- file.path(main.dir, "opaka-sim", Iteration, "em_2") 
+dir.create(new_EM_dir)
+files_list <- c("em.ctl", "forecast.ss", "starter.ss", "ss.exe")
+file.copy(from = file.path(main.dir, "opaka-sim", Iteration, "em", files_list), 
+to = new_EM_dir, overwrite = T)
+file.copy(from = file.path(main.dir, "opaka-sim", Iteration, "em", "ss3.dat"),
+to = new_EM_dir)
 
+## Sample data from OM 
+dat_exp <- SS_readdat_3.30(file.path(main.dir, "opaka-sim", Iteration, "om", "data_expval.ss"))
+### Index data
+dat_samp <- ss3sim::sample_index(dat_exp, fleets = c(1,3), years = list(seq(endyr+1, new_endyr), seq(endyr+1, new_endyr)),
+sds_obs = list(0.06, 0.25), seas = list(7,1))
+samp_ind <- dat_samp$CPUE %>% filter(year > endyr & year <= new_endyr)
+### Catch data
+dat_samp <- ss3sim::sample_catch(dat_samp) 
+samp_catch <- dat_samp$catch %>% filter(year > endyr & year <= new_endyr)
+### Lencomp data 
+dat_samp <- ss3sim::sample_lcomp(dat_samp, fleets = c(1,3), Nsamp = list(100, 45), years = list(seq(endyr+1, new_endyr), seq(endyr+1, new_endyr))) ##TODO: need to think more about Nsamp, cpar, and ESS
+samp_lencomp <- dat_samp$lencomp %>% filter(Yr > endyr & Yr <= new_endyr)
+### Agecomp data 
+dat_samp <- ss3sim::sample_agecomp(dat_samp, fleets = c(1,3), Nsamp = list(45, 45), years = list(seq(endyr+1, new_endyr), seq(endyr+1, new_endyr))) 
+samp_agecomp <- dat_samp$agecomp %>% filter(Yr > endyr & Yr <= new_endyr)
+rm("dat_exp")
+## Add new sampled data to previous run's data
+dat_em <- SS_readdat_3.30(file.path(new_EM_dir, "ss3.dat"))
+dat_em$endyr <- new_endyr
+dat_em$catch <- dat_em$catch %>% bind_rows(samp_catch) %>% arrange(fleet, year)
+dat_em$CPUE <- dat_em$CPUE %>% bind_rows(samp_ind) %>% arrange(index, year)
+dat_em$lencomp <- dat_em$lencomp %>% bind_rows(samp_lencomp) %>% arrange(FltSvy, Yr)
+dat_em$agecomp <- dat_em$agecomp %>% bind_rows(samp_agecomp) %>% arrange(FltSvy, Yr)
+## Save new data file 
+SS_writedat_3.30(dat_em, outfile = file.path(new_EM_dir, "ss3.dat"), overwrite = TRUE)
+
+## Run EM 
+r4ss::run(dir = new_EM_dir, exe = "ss", skipfinished = F)
+
+mods <- SSgetoutput(dirvec = c(file.path(main.dir, "opaka-sim", Iteration, "om"), file.path(main.dir, "opaka-sim", Iteration, "em"), new_EM_dir))
+mods_sum <- SSsummarize(mods)
+SSplotComparisons(mods_sum)
 
 ```
 
