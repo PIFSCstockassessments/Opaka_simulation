@@ -460,3 +460,51 @@ get_fits_acomp <- function(report.file){
     xx$Yr <- NULL
     return(xx)
 }
+
+#' Make a list of lists with dataframe components into a dataframes
+#'
+#' Bind together list of list components with the same name
+#' @param list_name A name to subset from iter_list
+#' @param list_df A list of dataframes. These need not have the same column
+#'  names, as this function will fill in with NAs.
+#' @author Kathryn L. Doering
+#' @return A dataframe
+make_df <- function(list_name, list_df) {
+  list_df_comp <- lapply(list_df, function(x) x[[list_name]])
+  # set anything not a dataframe (the NA values) as Null
+  list_df_comp <- lapply(list_df_comp, function(x) {
+    if (!is.data.frame(x)) {
+      x <- NULL
+    }
+    x
+  })
+  # drop any empty elements
+  list_df_comp <- purrr::compact(list_df_comp)
+  if (length(list_df_comp) > 0) {
+    all_nms <- unique(unlist(lapply(list_df_comp, names)))
+    # this extra code is needed in case of extra colnames that are not in both
+    # dataframes.
+    df <- do.call(
+      rbind,
+      c(
+        lapply(
+          list_df_comp,
+          function(x) {
+            data.frame(
+              c(x, vapply(
+                setdiff(all_nms, names(x)),
+                function(y) NA, NA
+              )),
+              stringsAsFactors = FALSE
+            )
+          }
+        ),
+        make.row.names = FALSE
+      )
+    )
+  } else {
+    df <- NA
+  }
+
+  df
+}
