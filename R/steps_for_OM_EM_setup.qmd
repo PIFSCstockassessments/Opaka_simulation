@@ -299,9 +299,9 @@ om_ems <- list(om = c("om", "om_2"), em = c("em", "em_2"))
 re_list <- lapply(om_ems, function(x){
     calculate_re_MO(results_scalar, EM = x, OM = x)
     })
-re_it2 <- calculate_re_MO(scale_wide, EM = "em_2", OM = "om_2")
+re_it2 <- calculate_re_MO(results_ts, EM = "em_2", OM = "om_2")
 ## Plot SB comparison between OM and EM
-re_ts %>%
+re_it2 %>%
 # mutate(model_run_iteration = paste(model_run, iteration, sep = "_")) %>%
 # filter(year > 0 & model_run_iteration %in% converged_its) %>%
 ggplot() +
