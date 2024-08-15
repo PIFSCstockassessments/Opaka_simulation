@@ -11,6 +11,7 @@ library(ss3sim)
 main.dir <- this.path::here(.. = 1)
 source(file.path(main.dir, "R", "simF.r"))
 source(file.path(main.dir, "R", "make_dummy_dat.r"))
+source(file.path(main.dir, "R", "get_fits.r"))
 set.seed <- read.csv(file.path(main.dir, "Inputs", "setseed.csv"))
 niter <- 5
 ```
@@ -163,14 +164,22 @@ To start, I am adding 5 years of constant F to the starting OM. F is determined 
 
 ```{r}
 n_yrs_fwd <- 5
-Iteration <- 1 #iteration
+Iteration <- 2 #iteration
+for(Iteration in 1:niter){
+
+## Create new OM directory 
+new_OM_dir <- file.path(main.dir, "opaka-sim", Iteration, "om_2") #TODO: will need to generalize om_2 somehow
+dir.create(new_OM_dir)
+files_list <- c("ss3.dat", "om.ctl", "forecast.ss", "starter.ss", "ss.exe")
+file.copy(from = file.path(main.dir, "opaka-sim", Iteration, "om", files_list), 
+to = new_OM_dir, overwrite = T)
 ##read in OM 
-om_dat <- SS_readdat_3.30(file = file.path(main.dir, "opaka-sim", Iteration, "om", "ss3.dat"))
+om_dat <- SS_readdat_3.30(file = file.path(new_OM_dir, "ss3.dat"))
 endyr <- om_dat$endyr
 new_endyr <- endyr+n_yrs_fwd
 
 ##update recdevs
-om_ctl <- SS_readctl_3.30(file = file.path(main.dir, "opaka-sim", Iteration, "om", "om.ctl"), datlist = om_dat)
+om_ctl <- SS_readctl_3.30(file = file.path(new_OM_dir, "om.ctl"), datlist = om_dat)
 
 om_ctl$MainRdevYrLast <- new_endyr
 om_ctl$last_yr_fullbias_adj <- new_endyr
@@ -191,7 +200,7 @@ F_non_comm <- new_f %>% filter(fleet == 2) %>% pull(Fvalue)
 newctl <- ss3sim::change_f(years = list(1:new_endyr,1:new_endyr), fleets = c(1,2), fvals = list(F_comm, F_non_comm), ctl_list = om_ctl)
 
 #save new ctl file
-SS_writectl(newctl, file.path(main.dir, "opaka-sim", Iteration, "om", "om.ctl"), overwrite = T)
+SS_writectl(newctl, file.path(new_OM_dir, "om.ctl"), overwrite = T)
 
 ##add dummy data rows to data file
 om_dat$endyr <- new_endyr
@@ -213,22 +222,22 @@ om_dat$agecomp <- bind_rows(
         make_dummy_dat_agecomp(fleets = 3, years = c(69:new_endyr), age_bins = om_dat$agebin_vector, nsex = 1)
     )
 #save new dat file
-SS_writedat(om_dat, file.path(main.dir, "opaka-sim", Iteration, "om", "ss3.dat"), overwrite = T)
+SS_writedat(om_dat, file.path(new_OM_dir, "ss3.dat"), overwrite = T)
 
 #run OM 
-r4ss::run(dir = file.path(main.dir, "opaka-sim", Iteration, "om"), exe = "ss", extras = "-nohess", skipfinished = F)
+r4ss::run(dir = new_OM_dir, exe = "ss", extras = "-nohess", skipfinished = F)
 
 ## Create new EM directory 
 new_EM_dir <- file.path(main.dir, "opaka-sim", Iteration, "em_2") 
 dir.create(new_EM_dir)
 files_list <- c("em.ctl", "forecast.ss", "starter.ss", "ss.exe")
 file.copy(from = file.path(main.dir, "opaka-sim", Iteration, "em", files_list), 
-to = new_EM_dir, overwrite = T)
+to = new_EM_dir, overwrite = T) #TODO: will need to generalize the em path here
 file.copy(from = file.path(main.dir, "opaka-sim", Iteration, "em", "ss3.dat"),
 to = new_EM_dir)
 
 ## Sample data from OM 
-dat_exp <- SS_readdat_3.30(file.path(main.dir, "opaka-sim", Iteration, "om", "data_expval.ss"))
+dat_exp <- SS_readdat_3.30(file.path(new_OM_dir, "data_expval.ss"))
 ### Index data
 dat_samp <- ss3sim::sample_index(dat_exp, fleets = c(1,3), years = list(seq(endyr+1, new_endyr), seq(endyr+1, new_endyr)),
 sds_obs = list(0.06, 0.25), seas = list(7,1))
@@ -255,10 +264,10 @@ SS_writedat_3.30(dat_em, outfile = file.path(new_EM_dir, "ss3.dat"), overwrite =
 
 ## Run EM 
 r4ss::run(dir = new_EM_dir, exe = "ss", skipfinished = F)
+rm(list = c("dat_em", "dat_samp", "om_dat", "newctl", "om_ctl"))
 
-mods <- SSgetoutput(dirvec = c(file.path(main.dir, "opaka-sim", Iteration, "om"), file.path(main.dir, "opaka-sim", Iteration, "em"), new_EM_dir))
-mods_sum <- SSsummarize(mods)
-SSplotComparisons(mods_sum)
+} #end of Iteration loop
+
 
 ```
 
@@ -266,8 +275,13 @@ SSplotComparisons(mods_sum)
 ## Get results from runs for model comparisons
 ```{r}
 
-get_results_all(overwrite_files = F,
-user_scenarios = "opaka-sim")
+get_results_all(
+    overwrite_files = F,
+    user_scenarios = "opaka-sim"
+)
+get_fits_all(
+    overwrite_files = T,
+    user_scenarios = "opaka-sim")
 
 results_ts <- read.csv(file.path(main.dir, "opaka-sim", "results_ts_opaka-sim.csv"))
 head(results_ts)
@@ -276,13 +290,23 @@ head(results_dq)
 results_scalar <- read.csv(file.path(main.dir, "opaka-sim", "results_scalar_opaka-sim.csv"))
 head(results_scalar)
 length(which(results_scalar$max_grad <= 1e-4))
-converged_its <- results_scalar[which(results_scalar$max_grad <= 1e-4),"iteration"]
+converged_its <- results_scalar %>% filter(str_detect(model_run, "em")) %>% filter(max_grad <= 1e-4) %>% 
+
+paste0(results_scalar[which(results_scalar$max_grad <= 1e-4),"model_run"], "_", results_scalar[which(results_scalar$max_grad <= 1e-4),"iteration"])
+
+## calculate relative error ((EM-OM)/OM) of parameters and derived quants
+om_ems <- list(om = c("om", "om_2"), em = c("em", "em_2"))
+re_list <- lapply(om_ems, function(x){
+    calculate_re_MO(results_scalar, EM = x, OM = x)
+    })
+re_it2 <- calculate_re_MO(scale_wide, EM = "em_2", OM = "om_2")
 ## Plot SB comparison between OM and EM
-results_ts %>%
-filter(year > 0 & iteration %in% converged_its) %>%
+re_ts %>%
+# mutate(model_run_iteration = paste(model_run, iteration, sep = "_")) %>%
+# filter(year > 0 & model_run_iteration %in% converged_its) %>%
 ggplot() +
-geom_line(aes(x = year, y = SpawnBio, group = model_run, color = model_run), linewidth = 1.2) +
-facet_wrap(~iteration) +
+geom_hline(yintercept = 0, color = "grey60") +
+geom_line(aes(x = year, y = SpawnBio_re, color = as.factor(iteration), group = iteration), linewidth = 1.2) +
 labs(x = "Year", y = "SSB") + 
 theme_bw()
 
@@ -305,35 +329,6 @@ facet_wrap(~iteration) +
 labs(x = "Year", y = "F") + 
 theme_bw()
 
-mod_dirs <- c(paste(main.dir, "opaka-sim", 1:niter, "om", sep = "/"), paste(main.dir, "opaka-sim", 1:niter, "em", sep = "/"))
-mods <- SSgetoutput(dirvec = mod_dirs)
-mods_sum <- SSsummarize(mods)
-inds_reduced <- mods_sum$indices %>%
-mutate(name = recode(name, 
-replist1 = "om1",
-replist2 = "om2",
-replist3 = "om3",
-replist4 = "om4", 
-replist5 = "om5",
-replist6 = "om6",
-replist7 = "om7",
-replist8 = "om8",
-replist9 = "om9",
-replist10 = "om10",
-replist11 = "em1",
-replist12 = "em2",
-replist13 = "em3",
-replist14 = "em4", 
-replist15 = "em5",
-replist16 = "em6",
-replist17 = "em7",
-replist18 = "em8",
-replist19 = "em9",
-replist20 = "em10"
-)) %>% 
-separate(col = "name", into = c("Model", "Iteration"), sep = "m") %>% 
-select(Fleet, Yr, Obs, Exp, Model, Iteration) %>% 
-filter(Iteration %in% converged_its)
 
 #plot CPUE comparison for commercial fleet
 inds_reduced %>%
@@ -355,25 +350,6 @@ facet_wrap(~Iteration) +
 labs(x = "Year", y = "Index") +
 theme_bw()
 
-##Comparing OMs with simplified mods
-oms <- SSgetoutput(dirvec = c(
-    file.path(main.dir,"models","03-simplified-mod"),
-    file.path(main.dir,"opaka-sim","1","om")
-    # file.path(main.dir,"01-Fsin-mat-paka","2","om"),
-    # file.path(main.dir,"01-Fsin-mat-paka","3","om"),
-    # file.path(main.dir,"01-Fsin-mat-paka","4","om"),
-    # file.path(main.dir,"01-Fsin-mat-paka","5","om"),
-    # file.path(main.dir,"01-Fsin-mat-paka","6","om"),
-    # file.path(main.dir,"01-Fsin-mat-paka","7","om"),
-    # file.path(main.dir,"01-Fsin-mat-paka","8","om"),
-    # file.path(main.dir,"01-Fsin-mat-paka","9","om"),
-    # file.path(main.dir,"01-Fsin-mat-paka","10","om")
-))
-om_sum <- SSsummarize(oms)
-SSplotComparisons(om_sum)
-
-em <- SS_output(dir = file.path(main.dir, "opaka-sim", "1", "em"))
-SS_plots(em)
 
 ```
 
