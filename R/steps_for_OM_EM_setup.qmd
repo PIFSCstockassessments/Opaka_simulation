@@ -13,7 +13,7 @@ source(file.path(main.dir, "R", "simF.r"))
 source(file.path(main.dir, "R", "make_dummy_dat.r"))
 source(file.path(main.dir, "R", "get_fits.r"))
 set.seed <- read.csv(file.path(main.dir, "Inputs", "setseed.csv"))
-niter <- 5
+niter <- 10
 ```
 
 
@@ -120,7 +120,7 @@ This loop can be run for each scenario to create the starting OM and EMs. To dis
 #recdev0 <- matrix(data = 0, nrow = 75, ncol = niter) #for testing deterministic runs with no rec-devs
 om_dir <- file.path(main.dir, "models", "opaka-om")
 em_dir <- file.path(main.dir, "models", "opaka-em")
-for(I in 1:niter){
+for(I in 6:niter){
     # Get F-vector 
     F_noncomm <- u_vec * F_vec_mat[I,]
     F_list <- list(
@@ -161,11 +161,23 @@ for(I in 1:niter){
 
 ## Adding 5 years of data to model 
 To start, I am adding 5 years of constant F to the starting OM. F is determined outside of the simulation loop but eventually, it will be derived from the previous EM and put into the next OM, then sampled with error for the EM. 
+Notes for self: 
+*   composition sample size - think in terms of stage-1 and stage-2. Stage-1 is input sample size and can be by number of hauls (or PSUs) or landing (Nfish sampled from fishery) (Punt et al 2021)
+*   Should age-comp data actually be CAAL? Probably. Good question to talk to Felipe and Eva about
+*   Fishery comp data _should_ be collected proportionally to catch, spatially and temporally. If the model isn't spatial, length comp data should be catch-weighted to obtain most representative data of the whole fishery
+
+
+Questions from Punt et al. 2021 to think about for this project:
+1. How does the ability to estimate quantities of management interest change with average annual (effective) sample sizes for length-comp and conditional age-length data? 
+~~2. Does including data sources with small sample sizes in an assessment lead to bias? ~~
+3. What are the implications of collecting length and age samples at intervals greater than one year but large sample sizes?
+~~4. How does the assessment performance change if sampling is unbalanced over time and space?~~
+
 
 ```{r}
 n_yrs_fwd <- 5
 Iteration <- 2 #iteration
-for(Iteration in 1:niter){
+for(Iteration in 6:niter){
 
 ## Create new OM directory 
 new_OM_dir <- file.path(main.dir, "opaka-sim", Iteration, "om_2") #TODO: will need to generalize om_2 somehow
@@ -276,7 +288,7 @@ rm(list = c("dat_em", "dat_samp", "om_dat", "newctl", "om_ctl"))
 ```{r}
 
 get_results_all(
-    overwrite_files = F,
+    overwrite_files = T,
     user_scenarios = "opaka-sim"
 )
 get_fits_all(
@@ -290,23 +302,24 @@ head(results_dq)
 results_scalar <- read.csv(file.path(main.dir, "opaka-sim", "results_scalar_opaka-sim.csv"))
 head(results_scalar)
 length(which(results_scalar$max_grad <= 1e-4))
-converged_its <- results_scalar %>% filter(str_detect(model_run, "em")) %>% filter(max_grad <= 1e-4) %>% 
+converged_its <- results_scalar %>% filter(str_detect(model_run, "em")) %>% filter(max_grad <= 1e-4)
 
 paste0(results_scalar[which(results_scalar$max_grad <= 1e-4),"model_run"], "_", results_scalar[which(results_scalar$max_grad <= 1e-4),"iteration"])
 
 ## calculate relative error ((EM-OM)/OM) of parameters and derived quants
-om_ems <- list(om = c("om", "om_2"), em = c("em", "em_2"))
-re_list <- lapply(om_ems, function(x){
-    calculate_re_MO(results_scalar, EM = x, OM = x)
-    })
-re_it2 <- calculate_re_MO(results_ts, EM = "em_2", OM = "om_2")
+om_ems <- list(c("om", "em"), c("om_2", "em_2"))
+re_list <- lapply(om_ems,function(x){
+    calculate_re_MO(results_scalar, EM = x[2], OM = x[1])
+})
+
 ## Plot SB comparison between OM and EM
-re_it2 %>%
+re_ts_df %>%
 # mutate(model_run_iteration = paste(model_run, iteration, sep = "_")) %>%
 # filter(year > 0 & model_run_iteration %in% converged_its) %>%
 ggplot() +
 geom_hline(yintercept = 0, color = "grey60") +
-geom_line(aes(x = year, y = SpawnBio_re, color = as.factor(iteration), group = iteration), linewidth = 1.2) +
+geom_line(aes(x = year, y = SpawnBio_re, color = model_run, group = model_run), linewidth = 1.2) +
+facet_wrap(~iteration) +
 labs(x = "Year", y = "SSB") + 
 theme_bw()
 

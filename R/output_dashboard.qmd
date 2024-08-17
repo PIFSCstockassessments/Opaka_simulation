@@ -1,0 +1,88 @@
+---
+title: "Simulation Outputs"
+format: 
+    dashboard:
+        orientation: rows
+        theme: flatly
+---
+
+
+```{r}
+# setup 
+library(r4ss)
+library(tidyverse)
+library(ss3sim)
+main.dir <- this.path::here(.. = 1)
+source(file.path(main.dir, "R", "calculate_re_MO.r"))
+```
+
+```{r}
+#| echo: false
+# read in results from simulation runs
+results_ts <- read.csv(file.path(main.dir, "opaka-sim", "results_ts_opaka-sim.csv"))
+results_dq <- read.csv(file.path(main.dir, "opaka-sim", "results_dq_opaka-sim.csv"))
+results_scalar <- read.csv(file.path(main.dir, "opaka-sim", "results_scalar_opaka-sim.csv"))
+fits_index <- read.csv(file.path(main.dir, "opaka-sim", "fits_index_opaka-sim.csv"))
+fits_agecomp <- read.csv(file.path(main.dir, "opaka-sim", "fits_agecomp_opaka-sim.csv"))
+fits_lencomp <- read.csv(file.path(main.dir, "opaka-sim", "fits_lencomp_opaka-sim.csv"))
+```
+
+### 
+```{r}
+converged_its <- results_scalar %>% filter(max_grad <= 1e-4) %>% select(c(model_run, iteration))
+om_ems <- list(c("om", "em"), c("om_2", "em_2"))
+ems <- c("em", "em_2")
+results_ts <- results_ts %>% filter(model_run %in% converged_its$model_run & iteration %in% converged_its$iteration | str_detect(model_run, "om"))
+re_ts_list <- lapply(om_ems,function(x){
+    calculate_re_MO(results_ts, EM = x[2], OM = x[1])
+})
+
+re_ts_df <- re_ts_list %>%
+map2(ems, ~cbind(.x, model_run = .y)) %>% 
+bind_rows() 
+
+re_ts_df %>%
+group_by(model_run, year) %>% 
+summarise(med_re = quantile(SpawnBio_re, .5),
+uci = quantile(SpawnBio_re, .95),
+lci = quantile(SpawnBio_re, .05)) %>% 
+ggplot() +
+geom_hline(yintercept = 0, color = "grey60") +
+geom_ribbon(aes(x = year, ymin = lci, ymax = uci), fill = "steelblue2", alpha = .5) + 
+geom_line(aes(x = year, y = med_re), color = "orange", linewidth = 1.2) +
+labs(x = "Year", y = "SSB MRE") + 
+facet_wrap(~model_run) +
+theme_bw()
+
+```
+
+
+###
+```{r}
+## plots for relative error of management specific values 
+
+results_scalar <- results_scalar %>% filter(model_run %in% converged_its$model_run & iteration %in% converged_its$iteration | str_detect(model_run, "om"))
+re_scal_list <- lapply(om_ems,function(x){
+    calculate_re_MO(results_scalar, EM = x[2], OM = x[1])
+})
+
+## quantities to keep track of 
+### depletion_re, F_MSY_re, SR_LN_R0_re, SSB_MSY_re, Totbio_Unfished_re
+
+re_scal_df <- re_scal_list %>%
+map2(ems, ~cbind(.x, model_run = .y)) %>% 
+bind_rows() 
+
+re_scal_df %>% select(c(iteration, model_run, depletion_re, F_MSY_re, SR_LN_R0_re, SSB_MSY_re)) %>%
+filter(model_run == "em_2") %>%
+pivot_longer(cols = c(depletion_re, F_MSY_re, SR_LN_R0_re, SSB_MSY_re)) %>% 
+ggplot() +
+geom_boxplot(aes(x = name, y = value)) + 
+geom_hline(yintercept = 0, color = "grey50", linetype = 2) +
+#facet_wrap(~model_run) + 
+labs(x = "Management Quants", y = "RE") + 
+theme_classic()
+
+
+```
+
