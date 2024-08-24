@@ -8,6 +8,10 @@
 !*/ 
 ## track SS input files filetypes
 !Model_Runs/*
+!opaka-sim/*
+!models/03-simplified-mod
+!models/opaka-em
+!models/opaka-om 
 !*/*data.ss
 !*/*data_boot*.ss
 !*/control.ss

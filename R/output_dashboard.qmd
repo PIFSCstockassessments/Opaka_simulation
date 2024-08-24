@@ -86,3 +86,18 @@ theme_classic()
 
 ```
 
+### 
+
+```{r}
+like_dir <- file.path(main.dir, "opaka-sim", "1", "em_5", "likelihood_prof")
+piner_plot <- list.files(like_dir, pattern = "profile_plot_likelihood", full.names = T)
+library(png)
+
+img <- readPNG(piner_plot[1])
+grid::grid.raster(img)
+# knitr::include_graphics(path = normalizePath("../opaka-sim/1/em_5/likelihood_prof/profile_plot_likelihood.png"))
+#knitr::include_graphics(piner_plot[1])
+ 
+
+```
+

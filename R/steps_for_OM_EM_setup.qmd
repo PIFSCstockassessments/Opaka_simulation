@@ -120,7 +120,7 @@ This loop can be run for each scenario to create the starting OM and EMs. To dis
 #recdev0 <- matrix(data = 0, nrow = 75, ncol = niter) #for testing deterministic runs with no rec-devs
 om_dir <- file.path(main.dir, "models", "opaka-om")
 em_dir <- file.path(main.dir, "models", "opaka-em")
-for(I in 6:niter){
+for(I in 1:niter){
     # Get F-vector 
     F_noncomm <- u_vec * F_vec_mat[I,]
     F_list <- list(
@@ -131,7 +131,7 @@ for(I in 6:niter){
     #create sampling scheme for indices of abundance
     index <- list(
         fleets = c(1,3), years = list(seq(1, 75, by = 1), seq(69, 75, by = 1)),
-        seas = list(7,1), sds_obs = list(0.06, 0.25)
+        seas = list(7,1), sds_obs = list(0.13, 0.25)
         )
     lcomp <- list(
         fleets = c(3), Nsamp = list(45),
@@ -172,15 +172,22 @@ Questions from Punt et al. 2021 to think about for this project:
 ~~2. Does including data sources with small sample sizes in an assessment lead to bias? ~~
 3. What are the implications of collecting length and age samples at intervals greater than one year but large sample sizes?
 ~~4. How does the assessment performance change if sampling is unbalanced over time and space?~~
-
+Questions from Ono et al. 2015
+1. What is the value of age vs length composition data? 
+2. What is the influence of age composition collection frequency and duration?
+3. What is the influence of frequency and duration of survey composition data?
+4. What is the impact of historical fishery composition data? 
+5. What is the impact of composition data sample size? 
+6. Which fishing pattern produces the most informative data? 
 
 ```{r}
 n_yrs_fwd <- 5
-Iteration <- 2 #iteration
+Iteration <- 1 #iteration
 for(Iteration in 6:niter){
 
-## Create new OM directory 
-new_OM_dir <- file.path(main.dir, "opaka-sim", Iteration, "om_2") #TODO: will need to generalize om_2 somehow
+## Create new OM directory
+om_I <- paste0("om_", n_yrs_fwd) 
+new_OM_dir <- file.path(main.dir, "opaka-sim", Iteration, om_I) #TODO: will need to generalize om_2 somehow
 dir.create(new_OM_dir)
 files_list <- c("ss3.dat", "om.ctl", "forecast.ss", "starter.ss", "ss.exe")
 file.copy(from = file.path(main.dir, "opaka-sim", Iteration, "om", files_list), 
@@ -240,7 +247,8 @@ SS_writedat(om_dat, file.path(new_OM_dir, "ss3.dat"), overwrite = T)
 r4ss::run(dir = new_OM_dir, exe = "ss", extras = "-nohess", skipfinished = F)
 
 ## Create new EM directory 
-new_EM_dir <- file.path(main.dir, "opaka-sim", Iteration, "em_2") 
+em_I <- paste0("em_", n_yrs_fwd)
+new_EM_dir <- file.path(main.dir, "opaka-sim", Iteration, em_I) 
 dir.create(new_EM_dir)
 files_list <- c("em.ctl", "forecast.ss", "starter.ss", "ss.exe")
 file.copy(from = file.path(main.dir, "opaka-sim", Iteration, "em", files_list), 
@@ -252,18 +260,35 @@ to = new_EM_dir)
 dat_exp <- SS_readdat_3.30(file.path(new_OM_dir, "data_expval.ss"))
 ### Index data
 dat_samp <- ss3sim::sample_index(dat_exp, fleets = c(1,3), years = list(seq(endyr+1, new_endyr), seq(endyr+1, new_endyr)),
-sds_obs = list(0.06, 0.25), seas = list(7,1))
+sds_obs = list(0.13, 0.25), seas = list(7,1))
 samp_ind <- dat_samp$CPUE %>% filter(year > endyr & year <= new_endyr)
 ### Catch data
 dat_samp <- ss3sim::sample_catch(dat_samp) 
 samp_catch <- dat_samp$catch %>% filter(year > endyr & year <= new_endyr)
 ### Lencomp data 
-dat_samp <- ss3sim::sample_lcomp(dat_samp, fleets = c(1,3), Nsamp = list(100, 45), years = list(seq(endyr+1, new_endyr), seq(endyr+1, new_endyr))) ##TODO: need to think more about Nsamp, cpar, and ESS
+dat_samp <- ss3sim::sample_lcomp(dat_samp, fleets = c(1,3), Nsamp = list(600, 45), years = list(seq(endyr+1, new_endyr), seq(endyr+1, new_endyr))) ##TODO: need to think more about Nsamp, cpar, and ESS
 samp_lencomp <- dat_samp$lencomp %>% filter(Yr > endyr & Yr <= new_endyr)
 ### Agecomp data 
 dat_samp <- ss3sim::sample_agecomp(dat_samp, fleets = c(1,3), Nsamp = list(45, 45), years = list(seq(endyr+1, new_endyr), seq(endyr+1, new_endyr))) 
 samp_agecomp <- dat_samp$agecomp %>% filter(Yr > endyr & Yr <= new_endyr)
 rm("dat_exp")
+
+###Scratch to delete later
+dat_samp <- ss3sim::sample_index(dat_exp, fleets = c(1,3), years = list(seq(1,75), seq(69,75)),
+sds_obs = list(0.13, 0.25), seas = list(7,1))
+
+### Catch data
+dat_samp <- ss3sim::sample_catch(dat_samp) 
+### Lencomp data 
+dat_samp <- ss3sim::sample_lcomp(dat_samp, fleets = c(3), Nsamp = list(45), years = list(seq(69,75))) ##TODO: need to think more about Nsamp, cpar, and ESS
+### Agecomp data 
+dat_samp <- ss3sim::sample_agecomp(dat_samp, fleets = c(3), Nsamp = list(45), years = list(seq(69,75))) 
+SS_writedat_3.30(dat_samp, outfile = file.path(new_EM_dir, "ss3.dat"), overwrite = TRUE)
+#######
+
+
+
+
 ## Add new sampled data to previous run's data
 dat_em <- SS_readdat_3.30(file.path(new_EM_dir, "ss3.dat"))
 dat_em$endyr <- new_endyr
@@ -274,12 +299,25 @@ dat_em$agecomp <- dat_em$agecomp %>% bind_rows(samp_agecomp) %>% arrange(FltSvy,
 ## Save new data file 
 SS_writedat_3.30(dat_em, outfile = file.path(new_EM_dir, "ss3.dat"), overwrite = TRUE)
 
+##update last year of recdevs
+ctl_em <- SS_readctl_3.30(file = file.path(new_EM_dir, "em.ctl"), datlist = dat_em)
+ctl_em$MainRdevYrLast <- new_endyr
+SS_writectl(ctl_em, file.path(new_EM_dir, "em.ctl"), overwrite = T)
+
 ## Run EM 
 r4ss::run(dir = new_EM_dir, exe = "ss", skipfinished = F)
+
+## Calculate recdev bias adjustments and re-run EM 
+ss3sim::calculate_bias(dir = new_EM_dir, ctl_file_in = file.path(new_EM_dir, "em.ctl")) #TODO not an exported function 
+r4ss::run(dir = new_EM_dir, exe = "ss", skipfinished = F)
+
+## clean up 
 rm(list = c("dat_em", "dat_samp", "om_dat", "newctl", "om_ctl"))
 
 } #end of Iteration loop
 
+rep <- SS_output(dir = new_EM_dir)
+SS_plots(rep)
 
 ```
 
@@ -307,7 +345,7 @@ converged_its <- results_scalar %>% filter(str_detect(model_run, "em")) %>% filt
 paste0(results_scalar[which(results_scalar$max_grad <= 1e-4),"model_run"], "_", results_scalar[which(results_scalar$max_grad <= 1e-4),"iteration"])
 
 ## calculate relative error ((EM-OM)/OM) of parameters and derived quants
-om_ems <- list(c("om", "em"), c("om_2", "em_2"))
+om_ems <- list(c("om", "em"), c(om_I, em_I))
 re_list <- lapply(om_ems,function(x){
     calculate_re_MO(results_scalar, EM = x[2], OM = x[1])
 })
@@ -325,7 +363,7 @@ theme_bw()
 
 #plot recdev comparisons
 results_ts %>% 
-filter(iteration %in% converged_its) %>%
+filter(iteration %in% converged_its$iteration) %>%
 ggplot(aes(x = year)) + 
 geom_hline(yintercept = 0, color = "grey50") + 
 geom_point(aes(y = rec_dev, color = model_run)) + 
@@ -366,6 +404,82 @@ theme_bw()
 
 ```
 
+
+### Run likelihood profiles
+
+```{r}
+#em_I <- paste0("em_", n_yrs_fwd)
+em_I <- "em_50"
+like_dir <- file.path(main.dir, "opaka-sim", Iteration, em_I, "likelihood_prof")
+dir.create(like_dir)
+files <- c("ss3.dat", "control.ss_new", "starter.ss", "forecast.ss", "ss.par", "ss.exe")
+file.copy(from = file.path(main.dir, "opaka-sim", Iteration, em_I, files), to = like_dir)
+CTL <- SS_readctl_3.30(file = file.path(like_dir, "control.ss_new"), datlist = file.path(like_dir, "ss3.dat"))
+r0 <- CTL$SR_parms$INIT[1]
+r0_vec <- seq(r0 - .8, r0 + 1, by = 0.2)
+START <- SS_readstarter(file = file.path(like_dir, "starter.ss"), verbose = FALSE)
+START$prior_like <- 1
+START$ctlfile <- "control_modified.ss"
+SS_writestarter(START, dir = like_dir, overwrite = TRUE, verbose = F)
+likes <- profile(
+  dir = like_dir,
+  newctlfile = "control_modified.ss",
+  string = "SR_LN",
+  profilevec = r0_vec[3:8],
+  exe = "ss",
+  verbose = FALSE,
+  extras="-nohess -nox"
+)
+
+profile_mods <- SSgetoutput(dirvec = like_dir, keyvec = 1:5)
+profile_mods_sum <- SSsummarize(profile_mods)
+SSplotProfile(profile_mods_sum,
+  profile.string = "SR_LN",
+  profile.label = "SR_LN(R0)",
+  print = TRUE,
+  plotdir = like_dir,
+
+)
+PinerPlot(profile_mods_sum, component = "Length_like", print = TRUE, plotdir = like_dir)
+
+
+rep <- SS_output(dir = new_EM_dir)
+SS_plots(rep)
+
+```
+
+```{r}
+#===========Run profile on R0======================================
+R0.range    <- seq(3.8,5,by=0.1)
+dir_profile <- file.path(root_dir,"01_SS final","00_Test")
+
+# run profile in parallel
+ncores <- parallelly::availableCores(omit = 1)
+future::plan(future::multisession, workers = ncores)
+prof.table <- profile(
+  dir = dir_profile,
+  oldctlfile = "control.ss",
+  newctlfile = "control_modified.ss",
+  string = "SR_LN(R0)", # subset of parameter label
+  profilevec = R0.range, exe="ss_opt_win",
+  usepar=F,parstring = "# SR_parm[1]:",
+  extras="-nohess -nox")
+future::plan(future::sequential)
+
+# read the output files (with names like Report1.sso, Report2.sso, etc.)
+profilemodels <- SSgetoutput(dirvec = dir_profile, keyvec = 1:length(R0.range))
+
+# Add model with the profile parameter estimated
+MLEmodel               <- SS_output(dir_profile, verbose = FALSE, printstats = FALSE)
+profilemodels[["MLE"]] <- MLEmodel
+profilesummary         <- SSsummarize(profilemodels)
+
+# plot profile using summary created above
+results <- SSplotProfile(profilesummary, # summary object
+                         profile.string = "R0", # substring of profile parameter
+                         profile.label = "Stock-recruit steepness (h)")
+
+```
 
 ### DEPRECATED: Loop to create OM and EMs
 Maybe want to break this up so that creating the OMs first, then can create the EMs and sampling strategies. Especially for running on OSG, it will be better to have starting OMs and maybe EMs done already then can run the rest of simulation (feedback loop or just multiple scenarios)
@@ -475,12 +589,15 @@ r4ss::run(dir = em.dir, exe = "ss_opt_win", skipfinished = F)
 }
 
 mods <- SSgetoutput(dirvec = c(
-    dir.it.em[1],
-    dir.it.om[1]
+    file.path(main.dir, "opaka-sim", "1", "em"),
+    file.path(main.dir, "opaka-sim", "2", "em"),
+    file.path(main.dir, "opaka-sim", "3", "em"),
+    file.path(main.dir, "opaka-sim", "5", "em"),
+    file.path(main.dir, "models", "03-simplified-mod")
 ))
 mods_sum <- SSsummarize(mods, verbose = F)
 SSplotComparisons(mods_sum)
-SSplotComparisons(mods_sum, legendlabels = c("em1", "em2", "em3", "em4", "em5", "om1", "om2", "om3","om4", "om5"))
+SSplotComparisons(mods_sum, legendlabels = c("em1", "em2", "em3", "em5", "simplified mod"))
 length(which(mods_sum$maxgrad <= 1e-4))
 SSplotData(mods$replist1)
 SS_plots(mods$replist5)
