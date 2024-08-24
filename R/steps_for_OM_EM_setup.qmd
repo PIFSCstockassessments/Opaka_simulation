@@ -273,22 +273,6 @@ dat_samp <- ss3sim::sample_agecomp(dat_samp, fleets = c(1,3), Nsamp = list(45, 4
 samp_agecomp <- dat_samp$agecomp %>% filter(Yr > endyr & Yr <= new_endyr)
 rm("dat_exp")
 
-###Scratch to delete later
-dat_samp <- ss3sim::sample_index(dat_exp, fleets = c(1,3), years = list(seq(1,75), seq(69,75)),
-sds_obs = list(0.13, 0.25), seas = list(7,1))
-
-### Catch data
-dat_samp <- ss3sim::sample_catch(dat_samp) 
-### Lencomp data 
-dat_samp <- ss3sim::sample_lcomp(dat_samp, fleets = c(3), Nsamp = list(45), years = list(seq(69,75))) ##TODO: need to think more about Nsamp, cpar, and ESS
-### Agecomp data 
-dat_samp <- ss3sim::sample_agecomp(dat_samp, fleets = c(3), Nsamp = list(45), years = list(seq(69,75))) 
-SS_writedat_3.30(dat_samp, outfile = file.path(new_EM_dir, "ss3.dat"), overwrite = TRUE)
-#######
-
-
-
-
 ## Add new sampled data to previous run's data
 dat_em <- SS_readdat_3.30(file.path(new_EM_dir, "ss3.dat"))
 dat_em$endyr <- new_endyr
