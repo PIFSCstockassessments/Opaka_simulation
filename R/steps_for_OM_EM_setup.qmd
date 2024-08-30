@@ -126,7 +126,8 @@ for(I in 1:niter){
     F_list <- list(
         years = list(1:75, 1:75),
         fleets = c(1, 2), 
-        fvals = list(F_vec_mat[I,], F_noncomm)
+        fvals = list(F_vec_com, F_vec_noncom)
+        #fvals = list(F_vec_mat[I,], F_noncomm)
         )
     #create sampling scheme for indices of abundance
     index <- list(
@@ -134,7 +135,7 @@ for(I in 1:niter){
         seas = list(7,1), sds_obs = list(0.13, 0.25)
         )
     lcomp <- list(
-        fleets = c(3), Nsamp = list(45),
+        fleets = c(3), Nsamp = list(75),
         years = list(seq(69, 75, by = 1))
         )
 
@@ -152,7 +153,8 @@ for(I in 1:niter){
         agecomp_params = agecomp,
         om_dir = om_dir,
         em_dir = em_dir,
-        user_recdevs = rdevs_array[1:75,]
+        user_recdevs = rdevs_array[1:75,],
+        bias_adjust = T
         )
 
 }
@@ -328,6 +330,21 @@ converged_its <- results_scalar %>% filter(str_detect(model_run, "em")) %>% filt
 
 paste0(results_scalar[which(results_scalar$max_grad <= 1e-4),"model_run"], "_", results_scalar[which(results_scalar$max_grad <= 1e-4),"iteration"])
 
+fits_inds <- read.csv(file.path(main.dir, "opaka-sim", "fits_index_opaka-sim.csv"))
+head(fits_inds)
+fits_inds$residuals <- (log(fits_inds$Obs) - log(fits_inds$Exp))
+
+fits_inds %>%
+filter(model_run != "om") %>%
+ggplot(aes(x = year, y = residuals)) + 
+geom_hline(yintercept = 0, linetype = 2, color = "grey50") +
+geom_segment(aes(x = year, y = 0, yend = residuals)) +
+geom_point(aes(color = factor(iteration))) + 
+geom_smooth() +
+facet_wrap(~Fleet_name, scales = "free_x") + 
+ylim(-.5, .5) +
+theme_classic()
+
 ## calculate relative error ((EM-OM)/OM) of parameters and derived quants
 om_ems <- list(c("om", "em"), c(om_I, em_I))
 re_list <- lapply(om_ems,function(x){
@@ -393,14 +410,14 @@ theme_bw()
 
 ```{r}
 #em_I <- paste0("em_", n_yrs_fwd)
-em_I <- "em_50"
+em_I <- "em"
 like_dir <- file.path(main.dir, "opaka-sim", Iteration, em_I, "likelihood_prof")
 dir.create(like_dir)
 files <- c("ss3.dat", "control.ss_new", "starter.ss", "forecast.ss", "ss.par", "ss.exe")
 file.copy(from = file.path(main.dir, "opaka-sim", Iteration, em_I, files), to = like_dir)
 CTL <- SS_readctl_3.30(file = file.path(like_dir, "control.ss_new"), datlist = file.path(like_dir, "ss3.dat"))
 r0 <- CTL$SR_parms$INIT[1]
-r0_vec <- seq(r0 - .8, r0 + 1, by = 0.2)
+r0_vec <- seq(r0 - 1, r0 + 1, by = 0.2)
 START <- SS_readstarter(file = file.path(like_dir, "starter.ss"), verbose = FALSE)
 START$prior_like <- 1
 START$ctlfile <- "control_modified.ss"
@@ -409,14 +426,16 @@ likes <- profile(
   dir = like_dir,
   newctlfile = "control_modified.ss",
   string = "SR_LN",
-  profilevec = r0_vec[3:8],
+  profilevec = r0_vec,
   exe = "ss",
   verbose = FALSE,
   extras="-nohess -nox"
 )
 
-profile_mods <- SSgetoutput(dirvec = like_dir, keyvec = 1:5)
+profile_mods <- SSgetoutput(dirvec = like_dir, keyvec = c(1,3:11))
 profile_mods_sum <- SSsummarize(profile_mods)
+profile_mods_sum$maxgrad <= 1e-4
+
 SSplotProfile(profile_mods_sum,
   profile.string = "SR_LN",
   profile.label = "SR_LN(R0)",
@@ -425,10 +444,10 @@ SSplotProfile(profile_mods_sum,
 
 )
 PinerPlot(profile_mods_sum, component = "Length_like", print = TRUE, plotdir = like_dir)
+PinerPlot(profile_mods_sum, component = "Surv_like", print = TRUE, plotdir = like_dir)
 
 
-rep <- SS_output(dir = new_EM_dir)
-SS_plots(rep)
+
 
 ```
 
