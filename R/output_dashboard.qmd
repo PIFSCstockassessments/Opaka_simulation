@@ -57,6 +57,21 @@ theme_bw()
 ```
 
 
+```{r}
+fits_inds$residuals <- (log(fits_inds$Obs) - log(fits_inds$Exp))
+
+fits_inds %>%
+filter(model_run != "om") %>%
+ggplot(aes(x = year, y = residuals)) + 
+geom_hline(yintercept = 0, linetype = 2, color = "grey50") +
+geom_segment(aes(x = year, y = 0, yend = residuals)) +
+geom_point(aes(color = factor(iteration))) + 
+geom_smooth() +
+facet_wrap(~Fleet_name, scales = "free_x") + 
+ylim(-.5, .5) +
+theme_classic()
+```
+
 ###
 ```{r}
 ## plots for relative error of management specific values 
