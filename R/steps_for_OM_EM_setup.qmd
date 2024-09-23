@@ -57,6 +57,36 @@ abline(h = 0)
 # dev.off()
 # save(list = "new_recdevs", file = file.path(main.dir, "Inputs", "recdevs_mat.RData"))
 
+recdev_sd <- 0.4
+future_recdevs <- matrix(data = NA, nrow = 50, ncol = 100)
+for(i in 1:nrow(future_recdevs)){ 
+    future_recdevs[i,] <- faux::rnorm_multi(n = 100, ## year vector
+                                vars = 1,
+                                mu = 0,
+                                r = 1-1e-5, #correlation
+                                sd = recdev_sd)[,1]
+}
+matplot(y = future_recdevs, type = "l")
+
+full_recdevs <- rbind(new_recdevs, future_recdevs)
+# save(list = "full_recdevs", file = file.path(main.dir, "Inputs", "recdevs_mat.RData"))
+
+future_cf <- matrix(data = NA, nrow = 50, ncol = 100)
+for(i in 1:nrow(future_cf)){ 
+    future_cf[i,] <- faux::rnorm_multi(n = 100, ## year vector
+                                vars = 1,
+                                mu = 0.0325262, # terminal year F from model
+                                r = 1-1e-5, #correlation
+                                sd = 0.0075)[,1]
+}
+matplot(y = future_cf, type = "l", lty = 1, lwd = 1.2)
+F_comm_df <- matrix(data = rep(F_comm_mod, 100), nrow = 75, ncol = 100,byrow = F)
+F_comm_df <- rbind(F_comm_df, future_cf)
+F_noncomm_mod <- rep$exploitation$Non_comm[-1]
+F_noncomm_df <- matrix(data = rep(F_noncomm_mod, 100), nrow = 75, ncol = 100,byrow = F)
+F_noncomm_df <- rbind(F_noncomm_df, future_cf * 1.03)
+# save(list = c("F_noncomm_df", "F_comm_df"), file = file.path(main.dir, "Inputs", "constantF_mat.RData"))
+
 ```
 
 ### Load already created RecDev-vectors and get F from simplified model
@@ -64,6 +94,7 @@ abline(h = 0)
 F_comm_mod <- rep$exploitation$Comm[-1]
 F_noncomm_mod <- rep$exploitation$Non_comm[-1]
 load(file.path(main.dir, "Inputs", "recdevs_mat.RData"))
+load(file.path(main.dir, "Inputs", "constantF_mat.RData"))
 ```
 
 
@@ -85,7 +116,7 @@ This loop can be run for each scenario to create the starting OM and EMs. To dis
 #recdev0 <- matrix(data = 0, nrow = 75, ncol = niter) #for testing deterministic runs with no rec-devs
 om_dir <- file.path(main.dir, "models", "opaka-om")
 em_dir <- file.path(main.dir, "models", "opaka-em")
-for(I in 2:niter){
+for(I in 11:niter){
     # Get F-vector 
    # F_noncomm <- u_vec * F_vec_mat[I,]
     F_list <- list(
@@ -105,7 +136,7 @@ for(I in 2:niter){
         )
 
     agecomp <- list(
-        fleets = c(3), Nsamp = list(45),
+        fleets = c(3), Nsamp = list(10),
         years = list(seq(69, 75, by = 1))
         )
 
@@ -122,7 +153,33 @@ for(I in 2:niter){
         bias_adjust = F
         )
 
+    om_dat <- SS_readdat_3.30(file = file.path(main.dir, "Model_Runs", I, "om", "ss3.dat"))
+    om_dat$Nsexes <- -1
+    SS_writedat(om_dat, file.path(main.dir, "Model_Runs", I, "om", "ss3.dat"), overwrite = T)
+    r4ss::run(dir = file.path(main.dir, "Model_Runs", I, "om"), exe = "ss", extras = "-nohess", skipfinished = F)
+
+    em_dat <- SS_readdat_3.30(file = file.path(main.dir, "Model_Runs", I, "em", "ss3.dat"))
+    em_dat$Nsexes <- -1
+    SS_writedat(em_dat, file.path(main.dir, "Model_Runs", I, "em", "ss3.dat"), overwrite = T)
+    r4ss::run(dir = file.path(main.dir, "Model_Runs", I, "em"), exe = "ss", skipfinished = F)
+    rm(list = c("om_dat", "em_dat"))
+    
+
 }
+
+for(i in 3:niter){
+    om_dat <- SS_readdat_3.30(file = file.path(main.dir, "Model_Runs", i, "om", "ss3.dat"))
+    om_dat$Nsexes <- -1
+    SS_writedat(om_dat, file.path(main.dir, "Model_Runs", i, "om", "ss3.dat"), overwrite = T)
+    r4ss::run(dir = file.path(main.dir, "Model_Runs", i, "om"), exe = "ss", extras = "-nohess", skipfinished = F)
+
+    em_dat <- SS_readdat_3.30(file = file.path(main.dir, "Model_Runs", i, "em", "ss3.dat"))
+    em_dat$Nsexes <- -1
+    SS_writedat(em_dat, file.path(main.dir, "Model_Runs", i, "em", "ss3.dat"), overwrite = T)
+    r4ss::run(dir = file.path(main.dir, "Model_Runs", i, "em"), exe = "ss", skipfinished = F)
+    rm(list = c("om_dat", "em_dat"))
+}
+
 
 reps <- SSgetoutput(dirvec = c(file.path(main.dir, "models", "03-simplified-mod"),
 file.path(main.dir, "Model_Runs", "1", "em"),
@@ -134,14 +191,28 @@ file.path(main.dir, "Model_Runs", "6", "em"),
 file.path(main.dir, "Model_Runs", "7", "em"),
 file.path(main.dir, "Model_Runs", "8", "em"),
 file.path(main.dir, "Model_Runs", "9", "em"),
-file.path(main.dir, "Model_Runs", "10", "em")
+file.path(main.dir, "Model_Runs", "10", "em"),
+file.path(main.dir, "Model_Runs", "11", "em")
+
+))
+reps <- SSgetoutput(dirvec = c(file.path(main.dir, "models", "03-simplified-mod"),
+file.path(main.dir, "Model_Runs", "1", "om"),
+file.path(main.dir, "Model_Runs", "2", "om"),
+file.path(main.dir, "Model_Runs", "3", "om"),
+file.path(main.dir, "Model_Runs", "4", "om"),
+file.path(main.dir, "Model_Runs", "5", "om"),
+file.path(main.dir, "Model_Runs", "6", "om"),
+file.path(main.dir, "Model_Runs", "7", "om"),
+file.path(main.dir, "Model_Runs", "8", "om"),
+file.path(main.dir, "Model_Runs", "9", "om"),
+file.path(main.dir, "Model_Runs", "10", "om")
 ))
 reps_sum <- SSsummarize(reps)
 SSplotComparisons(reps_sum)
 ```
 
-## Adding 5 years of data to model 
-To start, I am adding 5 years of constant F to the starting OM. F is determined outside of the simulation loop but eventually, it will be derived from the previous EM and put into the next OM, then sampled with error for the EM. 
+## Adding future data to model 
+I will add years of future data to the model based on simulated F's. I can simulate different possible F scenarios for the future, e.g. what if F increases over the next 50 years? what if F is constant over the next 50 years? Those F's will be added on to the F vector used right now and the same ss3sim_base function can be used to create a new EM. 
 Notes for self: 
 *   composition sample size - think in terms of stage-1 and stage-2. Stage-1 is input sample size and can be by number of hauls (or PSUs) or landing (Nfish sampled from fishery) (Punt et al 2021)
 *   Should age-comp data actually be CAAL? Probably. Good question to talk to Felipe and Eva about
@@ -160,6 +231,76 @@ Questions from Ono et al. 2015
 4. What is the impact of historical fishery composition data? 
 5. What is the impact of composition data sample size? 
 6. Which fishing pattern produces the most informative data? 
+
+```{r}
+
+n_yrs_fwd <- 5
+rec_devs <- rbind(new_recdevs, future_recdevs)
+for(I in 2:niter){
+    # Get F-vector 
+    #F_comm_mod <- c(F_comm_mod, rep(F_comm_mod[75], 5))
+    #F_comm_mod <- c(F_noncomm_mod, rep(F_noncomm_mod[75], 5))
+    F_list <- list(
+        years = list(1:80, 1:80),
+        fleets = c(1, 2), 
+        fvals = list(c(F_comm_mod, future_cf[1:n_yrs_fwd]), 
+        c(F_noncomm_mod, future_cf[1:n_yrs_fwd] * 1.03))
+        #fvals = list(F_vec_mat[I,], F_noncomm)
+        )
+    #create sampling scheme for indices of abundance
+    index <- list(
+        fleets = c(1,3), years = list(seq(1, 80, by = 1), seq(69, 80, by = 1)),
+        seas = list(7,1), sds_obs = list(0.13, 0.25)
+        )
+    lcomp <- list(
+        fleets = c(3), Nsamp = list(75),
+        years = list(seq(69, 80, by = 1))
+        )
+
+    agecomp <- list(
+        fleets = c(3), Nsamp = list(10),
+        years = list(seq(69, 80, by = 1))
+        )
+
+    ss3sim_base(
+        iterations = I,
+        scenarios = "5yr_cF", 
+        f_params = F_list,
+        index_params = index,
+        lcomp_params = lcomp,
+        agecomp_params = agecomp,
+        om_dir = om_dir,
+        em_dir = em_dir,
+        user_recdevs = rec_devs[1:80,], #row = years, col = iterations
+        bias_adjust = F
+        )
+
+    om_dat <- SS_readdat_3.30(file = file.path(main.dir, "5yr_cF", I, "om", "ss3.dat"))
+    om_dat$Nsexes <- -1
+    SS_writedat(om_dat, file.path(main.dir, "5yr_cF", I, "om", "ss3.dat"), overwrite = T)
+    r4ss::run(dir = file.path(main.dir, "5yr_cF", I, "om"), exe = "ss", extras = "-nohess", skipfinished = F)
+
+    em_dat <- SS_readdat_3.30(file = file.path(main.dir, "5yr_cF", I, "em", "ss3.dat"))
+    em_dat$Nsexes <- -1
+    SS_writedat(em_dat, file.path(main.dir, "5yr_cF", I, "em", "ss3.dat"), overwrite = T)
+    r4ss::run(dir = file.path(main.dir, "5yr_cF", I, "em"), exe = "ss", skipfinished = F)
+    rm(list = c("om_dat", "em_dat"))
+    
+
+}
+
+reps <- SSgetoutput(dirvec = c(
+file.path(main.dir, "5yr_cF", "1", "em"),
+file.path(main.dir, "5yr_cF", "2", "em"),
+file.path(main.dir, "5yr_cF", "3", "em"),
+file.path(main.dir, "5yr_cF", "4", "em"),
+file.path(main.dir, "5yr_cF", "5", "em")))
+reps_sum <- SSsummarize(reps)
+SSplotComparisons(reps_sum)
+```
+
+
+
 
 ```{r}
 n_yrs_fwd <- 5
@@ -390,10 +531,11 @@ theme_bw()
 ```{r}
 #em_I <- paste0("em_", n_yrs_fwd)
 em_I <- "em"
-like_dir <- file.path(main.dir, "opaka-sim", Iteration, em_I, "likelihood_prof")
+Iteration <- 11
+like_dir <- file.path(main.dir, "Model_Runs", Iteration, em_I, "likelihood_prof")
 dir.create(like_dir)
 files <- c("ss3.dat", "control.ss_new", "starter.ss", "forecast.ss", "ss.par", "ss.exe")
-file.copy(from = file.path(main.dir, "opaka-sim", Iteration, em_I, files), to = like_dir)
+file.copy(from = file.path(main.dir, "Model_Runs", Iteration, em_I, files), to = like_dir)
 CTL <- SS_readctl_3.30(file = file.path(like_dir, "control.ss_new"), datlist = file.path(like_dir, "ss3.dat"))
 r0 <- CTL$SR_parms$INIT[1]
 r0_vec <- seq(r0 - 1, r0 + 1, by = 0.2)
@@ -411,7 +553,7 @@ likes <- profile(
   extras="-nohess -nox"
 )
 
-profile_mods <- SSgetoutput(dirvec = like_dir, keyvec = c(1,3:11))
+profile_mods <- SSgetoutput(dirvec = like_dir, keyvec = c(1:11))
 profile_mods_sum <- SSsummarize(profile_mods)
 profile_mods_sum$maxgrad <= 1e-4
 
@@ -476,10 +618,10 @@ F_comm_mod <- rep$exploitation$Comm[-1]
 F_noncomm_mod <- rep$exploitation$Non_comm[-1]
 
 #create descreasing F trajectories
-# f_dec <- getFhist(nsim=10,Esd=0.1,nyears=75,dFmin=-0.2,dFmax=-0.1,bb=0.2,scale= 0.04)
-# f_dec_rescale <- apply(f_dec, 1, FUN = function(x)(scales::rescale(x, to = c(0.00958269, 0.08221600)))) #put on a similar scale to real F
+f_dec <- getFhist(nsim=10,Esd=0.1,nyears=75,dFmin=-0.2,dFmax=0.2,bb=0.2,scale= 0.04)
+f_dec_rescale <- apply(f_dec, 1, FUN = function(x)(scales::rescale(x, to = c(0.0325262, 0.08221600)))) #put on a similar scale to real F
 # png(filename = file.path(main.dir, "Model_Runs", "fid_example.png"),width=10,height=8,units="in",res=450,pointsize = 12)
-# matplot(x=seq(1,75,1),(f_dec_rescale),type='l',ylim=c(0,0.1),xlab="",ylab="Fishing mortality", lwd = 3,cex.lab=1.5,cex.axis=1.5, col = 1:10)
+matplot(x=seq(1,75,1),(f_dec_rescale),type='l',ylim=c(0,0.1),xlab="",ylab="Fishing mortality", lwd = 3,cex.lab=1.5,cex.axis=1.5, col = 1:10)
 # legend("topleft", legend = seq(1,10), col = 1:10, lty = 1, cex = 1.5)
 # dev.off()
 

@@ -1,0 +1,5 @@
+Scen_name,N_years,F_scen,Neff_len_Resfish,Resfish_index_CV,Neff_age_Resfish,Neff_len_Comm
+SQ,5,cf,45,0.25,10,0
+SQ,15,cf,45,0.25,10,0
+SQ,25,cf,45,0.25,10,0
+SQ,50,cf,45,0.25,10,0
