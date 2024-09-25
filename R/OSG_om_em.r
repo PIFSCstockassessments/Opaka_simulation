@@ -3,9 +3,10 @@ library(r4ss)
 library(magrittr)
 library(dplyr)
 library(ss3sim)
+library(snowfall)
 
 #Set up
-main.dir <- getwd()
+main.dir <- getwd() 
 source(file.path(main.dir, "R", "get_fits.r"))
 set.seed <- read.csv(file.path(main.dir, "Inputs", "setseed.csv"))
 sas_full <- read.csv(file.path(main.dir, "Inputs", "sas.csv"))
@@ -19,13 +20,15 @@ om_dir <- file.path(main.dir, "models", "opaka-om")
 em_dir <- file.path(main.dir, "models", "opaka-em")
 nyears <- 80
 nyears_fwd <- 5
-scen <- "SQ"
+scen <- "HRF"
 sas <- sas_full %>% filter(Scen_name == scen)
 files.keep <- c("ss.par", "starter.ss", "forecast.ss", "em.ctl", "control.ss_new", "ss3.dat")
 
-for(I in 1:niter){
-    # Get F-vector 
+#for(I in 1:niter){
+   
+wrapper_fn <- function(I, main.dir = main.dir, nyears = nyears, nyears_fwd = nyears_fwd, scen = scen, sas = sas, om_dir = om_dir, em_dir = em_dir){   
     
+    # Get F-vector 
     F_list <- list(
         years = list(1:nyears, 1:nyears),
         fleets = c(1, 2), 
@@ -75,20 +78,36 @@ for(I in 1:niter){
     r4ss::run(dir = em_path, exe = "ss", skipfinished = F)
     #clean for next run
     rm(list = c("om_dat", "em_dat"))
-    
-    #get results out of models for comparisons
-    get_results_all(
-        overwrite_files = T,
-        user_scenarios = paste(scen, nyears_fwd, "yrfwd", sep = "_")
-    )   
-    get_fits_all(
-        overwrite_files = T,
-        user_scenarios = paste(scen, nyears_fwd, "yrfwd", sep = "_")
-    )
-
-    #remove xtra files
-    unlink(setdiff(list.files(em_path, full.names = T), file.path(em_path,files.keep)), recursive=TRUE)
-    unlink(setdiff(list.files(om_path, full.names = T), file.path(om_path,files.keep)), recursive=TRUE)
 
 }
 
+A = proc.time()
+sfInit(parallel = TRUE, cpus = 6)
+sfLibrary(ss3sim)
+sfLibrary(r4ss)
+sfExport("full_recdevs")
+sfExport("F_comm_df")
+sfExport("F_noncomm_df")
+sfLapply(1:niter, wrapper_fn, main.dir = main.dir, nyears = nyears, nyears_fwd = nyears_fwd, scen = scen, sas = sas, om_dir = om_dir, em_dir = em_dir)
+sfStop()
+B = proc.time()
+(B-A)/60
+
+#get results out of models for comparisons
+all_scenario_names <- paste(sas_full$Scen_name, sas_full$N_years, "yrfwd", sep = "_")
+get_results_all(
+    overwrite_files = T,
+    user_scenarios = all_scenario_names,
+    filename_prefix = "all_scens"
+)   
+get_fits_all(
+    overwrite_files = F,
+    user_scenarios = all_scenario_names,
+    filename_prefix = "all_scens"
+)
+
+
+# #remove xtra files
+# files.keep <- c("ss.par", "starter.ss", "forecast.ss", "em.ctl", "control.ss_new", "ss3.dat")
+# unlink(setdiff(list.files(em_path, full.names = T), file.path(em_path,files.keep)), recursive=TRUE)
+# unlink(setdiff(list.files(om_path, full.names = T), file.path(om_path,files.keep)), recursive=TRUE)

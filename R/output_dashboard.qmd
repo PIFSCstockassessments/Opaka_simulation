@@ -19,45 +19,62 @@ source(file.path(main.dir, "R", "calculate_re_MO.r"))
 ```{r}
 #| echo: false
 # read in results from simulation runs
-results_ts <- read.csv(file.path(main.dir, "opaka-sim", "results_ts_opaka-sim.csv"))
-results_dq <- read.csv(file.path(main.dir, "opaka-sim", "results_dq_opaka-sim.csv"))
-results_scalar <- read.csv(file.path(main.dir, "opaka-sim", "results_scalar_opaka-sim.csv"))
-fits_index <- read.csv(file.path(main.dir, "opaka-sim", "fits_index_opaka-sim.csv"))
-fits_agecomp <- read.csv(file.path(main.dir, "opaka-sim", "fits_agecomp_opaka-sim.csv"))
-fits_lencomp <- read.csv(file.path(main.dir, "opaka-sim", "fits_lencomp_opaka-sim.csv"))
+
+files <- list.files(main.dir, pattern = ".csv")
+results.list <-  lapply(files, read.csv)
+
+#get index of list objects for each type of csv
+scalar.ind <- grep(pattern = "scalar.csv", x = files)
+dq.ind <- grep(pattern = "dq.csv", x = files)
+ts.ind <- grep(pattern = "ts.csv", x = files)
+agecomp.ind <- grep(pattern = "agecomp.csv", x = files)
+lencomp.ind <- grep(pattern = "lencomp.csv", x = files)
+index.ind <- grep(pattern = "index.csv", x = files)
+
+#create subset dfs by type
+scalar_df <- data.frame(results.list[scalar.ind])
+dq_df <- data.frame(results.list[dq.ind])
+ts_df <- data.frame(results.list[ts.ind])
+agecomp_df <- data.frame(results.list[agecomp.ind])
+lencomp_df <- data.frame(results.list[lencomp.ind])
+index_df <- data.frame(results.list[index.ind])
+
+#find models that didn't converge for filtering later
+nonconverged_its <- scalar_df %>% 
+    filter(max_grad > 1e-4) %>% 
+    select(c(model_run, iteration,scenario)) %>% 
+    mutate(nonconverged_run = paste(scenario, iteration, sep = "_"))
 ```
 
 ### 
 ```{r}
-converged_its <- results_scalar %>% filter(max_grad <= 1e-4) %>% select(c(model_run, iteration))
-om_ems <- list(c("om", "em"), c("om_2", "em_2"))
-ems <- c("em", "em_2")
-results_ts <- results_ts %>% filter(model_run %in% converged_its$model_run & iteration %in% converged_its$iteration | str_detect(model_run, "om"))
-re_ts_list <- lapply(om_ems,function(x){
-    calculate_re_MO(results_ts, EM = x[2], OM = x[1])
-})
 
-re_ts_df <- re_ts_list %>%
-map2(ems, ~cbind(.x, model_run = .y)) %>% 
-bind_rows() 
+#filter out non-converged runs
+results_ts <- ts_df %>% 
+    mutate(run_ID = paste(scenario, iteration, sep = "_")) %>% 
+    filter(! run_ID %in% nonconverged_its$nonconverged_run) %>% 
+    select(SpawnBio, Recruit_0, F_1, SPRratio, rec_dev, raw_rec_dev, year, model_run, iteration, scenario)
 
-re_ts_df %>%
-group_by(model_run, year) %>% 
+#calculate relative error of SSB
+ts_re <- calculate_re(results_ts)
+
+ts_re %>%
+group_by(scenario, year) %>% 
 summarise(med_re = quantile(SpawnBio_re, .5),
 uci = quantile(SpawnBio_re, .95),
 lci = quantile(SpawnBio_re, .05)) %>% 
 ggplot() +
 geom_hline(yintercept = 0, color = "grey60") +
-geom_ribbon(aes(x = year, ymin = lci, ymax = uci), fill = "steelblue2", alpha = .5) + 
-geom_line(aes(x = year, y = med_re), color = "orange", linewidth = 1.2) +
+geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scenario), alpha = .5) + 
+geom_line(aes(x = year, y = med_re, color = scenario), linewidth = 1.2) +
 labs(x = "Year", y = "SSB MRE") + 
-facet_wrap(~model_run) +
 theme_bw()
 
 ```
 
 
 ```{r}
+##TODO: left off here 9/24
 fits_inds$residuals <- (log(fits_inds$Obs) - log(fits_inds$Exp))
 
 fits_inds %>%
