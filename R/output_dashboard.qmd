@@ -13,14 +13,13 @@ library(r4ss)
 library(tidyverse)
 library(ss3sim)
 main.dir <- this.path::here(.. = 1)
-source(file.path(main.dir, "R", "calculate_re_MO.r"))
 ```
 
 ```{r}
 #| echo: false
 # read in results from simulation runs
 
-files <- list.files(main.dir, pattern = ".csv")
+files <- list.files(main.dir, pattern = ".csv", full.names = T)
 results.list <-  lapply(files, read.csv)
 
 #get index of list objects for each type of csv
@@ -39,6 +38,7 @@ agecomp_df <- data.frame(results.list[agecomp.ind])
 lencomp_df <- data.frame(results.list[lencomp.ind])
 index_df <- data.frame(results.list[index.ind])
 
+
 #find models that didn't converge for filtering later
 nonconverged_its <- scalar_df %>% 
     filter(max_grad > 1e-4) %>% 
@@ -48,7 +48,6 @@ nonconverged_its <- scalar_df %>%
 
 ### 
 ```{r}
-
 #filter out non-converged runs
 results_ts <- ts_df %>% 
     mutate(run_ID = paste(scenario, iteration, sep = "_")) %>% 
@@ -57,6 +56,15 @@ results_ts <- ts_df %>%
 
 #calculate relative error of SSB
 ts_re <- calculate_re(results_ts)
+
+# ts_re %>%
+# group_by(scenario, year) %>% 
+# ggplot() +
+# geom_hline(yintercept = 0, color = "grey60") +
+# geom_line(aes(x = year, y = SpawnBio_re, group= iteration, color = factor(iteration)), linewidth = 1.2) +
+# labs(x = "Year", y = "SSB MRE") + 
+# facet_wrap(~scenario) +
+# theme_bw()
 
 ts_re %>%
 group_by(scenario, year) %>% 
@@ -74,44 +82,58 @@ theme_bw()
 
 
 ```{r}
-##TODO: left off here 9/24
-fits_inds$residuals <- (log(fits_inds$Obs) - log(fits_inds$Exp))
+index_df <- index_df %>% 
+    mutate(run_ID = paste(scenario, iteration, sep = "_")) %>% 
+    filter(! run_ID %in% nonconverged_its$nonconverged_run) %>% 
+    mutate(residuals = log(Obs) - log(Exp))
 
-fits_inds %>%
-filter(model_run != "om") %>%
+index_df %>%
+filter(model_run == "em" & Fleet_name == "Comm") %>%
 ggplot(aes(x = year, y = residuals)) + 
 geom_hline(yintercept = 0, linetype = 2, color = "grey50") +
-geom_segment(aes(x = year, y = 0, yend = residuals)) +
-geom_point(aes(color = factor(iteration))) + 
-geom_smooth() +
-facet_wrap(~Fleet_name, scales = "free_x") + 
+geom_boxplot(aes(x = year, y = residuals, group = year)) +
+# geom_segment(aes(x = year, y = 0, yend = residuals)) +
+#geom_line(aes(group = residuals)) (may need to play around with this but should make it so you don't need segments)
+#geom_point(aes(color = scenario), alpha = .5) + 
+geom_smooth(aes(group = scenario, color = scenario)) +
+facet_wrap(~scenario, scales = "free_x") + 
 ylim(-.5, .5) +
 theme_classic()
+
+index_df %>%
+filter(model_run == "em" & Fleet_name == "ResFish") %>%
+ggplot(aes(x = year, y = residuals)) + 
+geom_hline(yintercept = 0, linetype = 2, color = "grey50") +
+geom_boxplot(aes(x = year, y = residuals, group = year)) +
+# geom_segment(aes(x = year, y = 0, yend = residuals)) +
+#geom_point(aes(color = scenario), alpha = .5) + 
+geom_smooth(aes(group = scenario, color = scenario)) +
+facet_wrap(~scenario, scales = "free_x") + 
+ylim(-.5, .5) +
+theme_classic()
+
 ```
 
 ###
 ```{r}
 ## plots for relative error of management specific values 
 
-results_scalar <- results_scalar %>% filter(model_run %in% converged_its$model_run & iteration %in% converged_its$iteration | str_detect(model_run, "om"))
-re_scal_list <- lapply(om_ems,function(x){
-    calculate_re_MO(results_scalar, EM = x[2], OM = x[1])
-})
+results_scalar <- scalar_df %>%  
+    mutate(run_ID = paste(scenario, iteration, sep = "_")) %>% 
+    filter(! run_ID %in% nonconverged_its$nonconverged_run) %>% 
+    select(-run_ID)
+
+scalar_re <- calculate_re(results_scalar)
 
 ## quantities to keep track of 
 ### depletion_re, F_MSY_re, SR_LN_R0_re, SSB_MSY_re, Totbio_Unfished_re
 
-re_scal_df <- re_scal_list %>%
-map2(ems, ~cbind(.x, model_run = .y)) %>% 
-bind_rows() 
-
-re_scal_df %>% select(c(iteration, model_run, depletion_re, F_MSY_re, SR_LN_R0_re, SSB_MSY_re)) %>%
-filter(model_run == "em_2") %>%
+scalar_re %>% 
+select(c(iteration, scenario, depletion_re, F_MSY_re, SR_LN_R0_re, SSB_MSY_re)) %>%
 pivot_longer(cols = c(depletion_re, F_MSY_re, SR_LN_R0_re, SSB_MSY_re)) %>% 
 ggplot() +
-geom_boxplot(aes(x = name, y = value)) + 
+geom_boxplot(aes(x = name, y = value, fill = scenario)) + 
 geom_hline(yintercept = 0, color = "grey50", linetype = 2) +
-#facet_wrap(~model_run) + 
 labs(x = "Management Quants", y = "RE") + 
 theme_classic()
 
@@ -121,6 +143,7 @@ theme_classic()
 ### 
 
 ```{r}
+#| eval: false
 like_dir <- file.path(main.dir, "opaka-sim", "1", "em_5", "likelihood_prof")
 piner_plot <- list.files(like_dir, pattern = "profile_plot_likelihood", full.names = T)
 library(png)
