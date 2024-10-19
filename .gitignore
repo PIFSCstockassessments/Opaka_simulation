@@ -24,4 +24,8 @@
 !*.R
 !Inputs/*
 !*.qmd
+# renv files
+!renv/settings.json
+!renv.lock
+!.Rprofile
 
