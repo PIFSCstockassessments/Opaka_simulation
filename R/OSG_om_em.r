@@ -3,7 +3,7 @@ library(r4ss) #needs to be v1.46.1 to work with ss3sim
 library(magrittr)
 library(dplyr)
 #pak::pkg_install("MOshima-PIFSC/ss3sim") for version that includes hyperstability function
-library(ss3sim)
+library(ss3sim) #be sure to use ss3.exe v3.30.19
 library(snowfall)
 
 #Set up
@@ -14,7 +14,8 @@ sas_full <- read.csv(file.path(main.dir, "Inputs", "sas.csv"))
 load(file.path(main.dir, "Inputs", "constantF_mat.RData"))
 load(file.path(main.dir, "Inputs", "recdevs_mat.RData"))
 load(file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"))
-niter <- 10
+source(file.path(main.dir, "R", "get_fits.r"))
+niter <- 5
 #u_vec vector of ratios for calculating non-commercial catch
 #u_vec <- c(rep(1.8, 26), rep(1.47, 29), rep(1.03, 70))
 nyears <- 90
@@ -59,7 +60,7 @@ wrapper_fn <- function(I, main.dir = main.dir, nyears = nyears, nyears_fwd = nye
 
     agecomp <- list(
         fleets = c(3), Nsamp = list(sas[which(sas$N_years == nyears_fwd), "Neff_age_Resfish"]),
-        years = list(seq(69, nyears, by = 1))
+        years = list(seq(69, 70, by = 1))
     )
     
     seed <- set.seed[I,2]
@@ -70,34 +71,42 @@ wrapper_fn <- function(I, main.dir = main.dir, nyears = nyears, nyears_fwd = nye
         f_params = F_list,
         index_params = index,
         lcomp_params = lcomp,
-        #agecomp_params = agecomp,
+        agecomp_params = agecomp,
         om_dir = om_dir,
         em_dir = em_dir,
-        user_recdevs = full_poor_recdevs,
+        user_recdevs = full_recdevs,
         bias_adjust = T,
         seed = seed
     )
 
-    om_path <- file.path(main.dir, paste(scen, nyears_fwd, "yrfwd", sep = "_"), I, "om")
-    em_path <- file.path(main.dir, paste(scen, nyears_fwd, "yrfwd", sep = "_"), I, "em")
+    # om_path <- file.path(main.dir, paste(scen, nyears_fwd, "yrfwd", sep = "_"), I, "om")
+    # #rerun om and em to get ssb on right scale (issue with ss3sim function, doesn't allow Ngender = -1)
+    # # om_dat <- SS_readdat_3.30(file = file.path(om_path, "ss3.dat"))
+    # # om_dat$Nsexes <- -1
+    # # SS_writedat(om_dat, file.path(om_path, "ss3.dat"), overwrite = T)
+    # # r4ss::run(dir = om_path, exe = "ss3", extras = "-nohess", skipfinished = F)
+    # # em_dat$Nsexes <- -1
+    #for hyperstable scenario, copy data from normal rec models and use it for EM
+    if(scen == "SQhyperstable"){
 
-    #rerun om and em to get ssb on right scale (issue with ss3sim function, doesn't allow Ngender = -1)
-    om_dat <- SS_readdat_3.30(file = file.path(om_path, "ss3.dat"))
-    om_dat$Nsexes <- -1
-    SS_writedat(om_dat, file.path(om_path, "ss3.dat"), overwrite = T)
-    r4ss::run(dir = om_path, exe = "ss", extras = "-nohess", skipfinished = F)
+        regular_em <- SS_readdat_3.30(file.path(main.dir, paste("SQ", nyears_fwd, "yrfwd", sep = "_"), i, "em", "ss3.dat"))
+        em_path <- file.path(main.dir, paste(scen, nyears_fwd, "yrfwd", sep = "_"), i, "em")
+        #replace catch and CPUE for commercial fishery
+        em_dat <- SS_readdat_3.30(file = file.path(em_path, "ss3.dat"))
+        em_dat$catch <- regular_em$catch
+        em_dat$CPUE$obs[1:nyears] <- regular_em$CPUE$obs[1:nyears]
+        SS_writedat(em_dat, file.path(em_path, "ss3.dat"), overwrite = T)
+        r4ss::run(dir = em_path, exe = "ss3", skipfinished = F, verbose = F)
+        
+        #clean for next run
+        rm(list = c("om_dat", "em_dat"))
 
-    em_dat <- SS_readdat_3.30(file = file.path(em_path, "ss3.dat"))
-    em_dat$Nsexes <- -1
-    SS_writedat(em_dat, file.path(em_path, "ss3.dat"), overwrite = T)
-    r4ss::run(dir = em_path, exe = "ss", skipfinished = F)
-    #clean for next run
-    rm(list = c("om_dat", "em_dat"))
+    }
 
 }
 
 A = proc.time()
-sfInit(parallel = TRUE, cpus = 10)
+sfInit(parallel = TRUE, cpus = 6)
 sfLibrary(ss3sim)
 sfLibrary(r4ss)
 sfExport("F_comm_df")
@@ -108,16 +117,20 @@ sfStop()
 B = proc.time()
 (B-A)/60
 
+
+
+
+
 #get results out of models for comparisons
 all_scenario_names <- paste(sas_full$Scen_name, sas_full$N_years, "yrfwd", sep = "_")
 get_results_all(
     overwrite_files = T,
-    user_scenarios = all_scenario_names,
+    user_scenarios = all_scenario_names[c(2,10,14)],
     filename_prefix = "all_scens"
 )   
 get_fits_all(
-    overwrite_files = F,
-    user_scenarios = all_scenario_names,
+    overwrite_files = T,
+    user_scenarios = all_scenario_names[c(2,10,14)],
     filename_prefix = "all_scens"
 )
 

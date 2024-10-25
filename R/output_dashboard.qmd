@@ -3,7 +3,7 @@ title: "Simulation Outputs"
 format: 
     dashboard:
         orientation: rows
-        theme: flatly
+        theme: sandstone
 ---
 
 
