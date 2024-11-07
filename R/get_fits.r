@@ -458,6 +458,9 @@ get_fits_acomp <- function(report.file){
     xx <- xx[xx$Yr %in% years, ]
     xx$year <- xx$Yr
     xx$Yr <- NULL
+    if(nrow(xx) == 0){
+      xx[1,] <- NA
+    }
     return(xx)
 }
 

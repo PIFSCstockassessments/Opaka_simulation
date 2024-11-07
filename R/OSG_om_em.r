@@ -5,6 +5,7 @@ library(dplyr)
 #pak::pkg_install("MOshima-PIFSC/ss3sim") for version that includes hyperstability function
 library(ss3sim) #be sure to use ss3.exe v3.30.19
 library(snowfall)
+library(stringr)
 
 #Set up
 main.dir <- getwd() 
@@ -23,7 +24,7 @@ nyears_fwd <- 15
 om_dir <- file.path(main.dir, "models", paste0("opaka-om-", nyears_fwd)) #-5 -15 -25 -50
 em_dir <- file.path(main.dir, "models", paste0("opaka-em-", nyears_fwd)) #-5 -15 -25 -50
 
-scen <- "SQhyperstable"
+scen <- "HRFpoorrec"
 sas <- sas_full %>% filter(Scen_name == scen)
 #files.keep <- c("ss.par", "starter.ss", "forecast.ss", "em.ctl", "control.ss_new", "ss3.dat")
 
@@ -44,17 +45,8 @@ wrapper_fn <- function(I, main.dir = main.dir, nyears = nyears, nyears_fwd = nye
         sds_obs = list(0.13, sas[which(sas$N_years == nyears_fwd), "Resfish_index_CV"]) 
     )
 
-    # index <- list(
-    #     fleets = c(1, 1, 3), 
-    #     years = list(seq(1, 75, by = 1), seq(76, nyears, by = 1), seq(69, nyears, by = 1)),
-    #     seas = list(7,7,1), 
-    #     sds_obs = list(0.13, 0.13, sas[which(sas$N_years == nyears_fwd), "Resfish_index_CV"]), 
-    #     beta = list(1, 0.1, 1),
-    #     bias = "hyperstable"
-    # )
-
     lcomp <- list(
-        fleets = c(3), Nsamp = list(sas[which(sas$N_years == nyears_fwd), "Neff_len_Resfish"]),
+        fleets = c(3), Nsamp = list(c(rep(45, 7), rep(sas[which(sas$N_years == nyears_fwd), "Neff_len_Resfish"], nyears_fwd))),
         years = list(seq(69, nyears, by = 1))
     )
 
@@ -71,7 +63,7 @@ wrapper_fn <- function(I, main.dir = main.dir, nyears = nyears, nyears_fwd = nye
         f_params = F_list,
         index_params = index,
         lcomp_params = lcomp,
-        agecomp_params = agecomp,
+        #agecomp_params = agecomp,
         om_dir = om_dir,
         em_dir = em_dir,
         user_recdevs = full_recdevs,
@@ -87,10 +79,11 @@ wrapper_fn <- function(I, main.dir = main.dir, nyears = nyears, nyears_fwd = nye
     # # r4ss::run(dir = om_path, exe = "ss3", extras = "-nohess", skipfinished = F)
     # # em_dat$Nsexes <- -1
     #for hyperstable scenario, copy data from normal rec models and use it for EM
-    if(scen == "SQhyperstable"){
+    if(str_detect(scen, "hyperstable")){
 
-        regular_em <- SS_readdat_3.30(file.path(main.dir, paste("SQ", nyears_fwd, "yrfwd", sep = "_"), i, "em", "ss3.dat"))
-        em_path <- file.path(main.dir, paste(scen, nyears_fwd, "yrfwd", sep = "_"), i, "em")
+        scen_prefix <- str_split(scen, "hyperstable")[[1]][1]
+        regular_em <- SS_readdat_3.30(file.path(main.dir, paste(scen_prefix, nyears_fwd, "yrfwd", sep = "_"), I, "em", "ss3.dat"))
+        em_path <- file.path(main.dir, paste(scen, nyears_fwd, "yrfwd", sep = "_"), I, "em")
         #replace catch and CPUE for commercial fishery
         em_dat <- SS_readdat_3.30(file = file.path(em_path, "ss3.dat"))
         em_dat$catch <- regular_em$catch
@@ -106,13 +99,15 @@ wrapper_fn <- function(I, main.dir = main.dir, nyears = nyears, nyears_fwd = nye
 }
 
 A = proc.time()
-sfInit(parallel = TRUE, cpus = 6)
+sfInit(parallel = TRUE, cpus = 5)
 sfLibrary(ss3sim)
 sfLibrary(r4ss)
+sfLibrary(stringr)
 sfExport("F_comm_df")
 sfExport("F_noncomm_df")
 sfExport("set.seed")
-sfLapply(1:niter, wrapper_fn, main.dir = main.dir, nyears = nyears, nyears_fwd = nyears_fwd, scen = scen, sas = sas, full_recdevs = full_poor_recdevs, om_dir = om_dir, em_dir = em_dir)
+sfLapply(1:niter, wrapper_fn, main.dir = main.dir, nyears = nyears, nyears_fwd = nyears_fwd, 
+    scen = scen, sas = sas, full_recdevs = full_poor_recdevs, om_dir = om_dir, em_dir = em_dir)
 sfStop()
 B = proc.time()
 (B-A)/60
@@ -125,12 +120,12 @@ B = proc.time()
 all_scenario_names <- paste(sas_full$Scen_name, sas_full$N_years, "yrfwd", sep = "_")
 get_results_all(
     overwrite_files = T,
-    user_scenarios = all_scenario_names[c(2,10,14)],
+    user_scenarios = all_scenario_names,
     filename_prefix = "all_scens"
 )   
 get_fits_all(
     overwrite_files = T,
-    user_scenarios = all_scenario_names[c(2,10,14)],
+    user_scenarios = all_scenario_names,
     filename_prefix = "all_scens"
 )
 

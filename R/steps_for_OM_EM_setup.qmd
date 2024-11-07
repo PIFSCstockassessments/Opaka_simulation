@@ -8,6 +8,7 @@ format: html
 library(r4ss)
 library(tidyverse)
 library(ss3sim)
+library(stringr)
 main.dir <- this.path::here(.. = 1)
 source(file.path(main.dir, "R", "simF.r"))
 source(file.path(main.dir, "R", "make_dummy_dat.r"))
@@ -19,7 +20,7 @@ rep <- SS_output(dir = file.path(main.dir, "models", "03-simplified-mod"))
 
 
 ### Create rec dev timeseries
-Use estimated rec devs from "03-simplified-mod" but add some noise to the last 10 years. 
+Use estimated rec devs from "03-simplified-mod" but add some noise to the last 10 years. Then simulate future recruitment trajectories. Future_recdevs is stable recruitment devs centered around 0 with an sd of 0.16. Poor_recdevs simulates declining productivity by ~30% over the first 20 years and then stable, low productivity for the next 30 years. 
 ```{r}
 recdevs_df <- rep$parameters %>% 
 filter(str_detect(Label, "Rec")) %>% 
@@ -39,7 +40,7 @@ for(i in 2:nrow(new_recdevs)){
                                  r = 1-1e-5, #correlation
                                  sd = recdev_sd)[,1]   
     }else{
-        recdev_sd <- 0.32
+        recdev_sd <- 0.16
         new_recdevs[i,] <- faux::rnorm_multi(n = 100, ## year vector
                                  vars = 1,
                                  mu = 0,
@@ -58,7 +59,7 @@ lines(x = 2:75, y = recdevs_df$Value, col = "red", lwd = 2)
 # dev.off()
 # save(list = "new_recdevs", file = file.path(main.dir, "Inputs", "recdevs_mat.RData"))
 
-recdev_sd <- 0.32
+recdev_sd <- 0.16
 future_recdevs <- matrix(data = NA, nrow = 50, ncol = 100)
 for(i in 1:nrow(future_recdevs)){ 
     future_recdevs[i,] <- faux::rnorm_multi(n = 100, ## year vector
@@ -70,28 +71,60 @@ for(i in 1:nrow(future_recdevs)){
 matplot(y = future_recdevs, type = "l")
 
 full_recdevs <- rbind(new_recdevs, future_recdevs)
-#  save(list = "full_recdevs", file = file.path(main.dir, "Inputs", "recdevs_mat.RData"))
+# save(list = "full_recdevs", file = file.path(main.dir, "Inputs", "recdevs_mat.RData"))
 matplot(y = full_recdevs, type = "l")
-## years of poor recruitment in the future
 
-recdev_sd <- 0.2
+## years of poor recruitment in the future
 poor_recdevs <- matrix(data = NA, nrow = 50, ncol = 100)
-for(i in 1:nrow(poor_recdevs)){ 
-    poor_recdevs[i,] <- faux::rnorm_multi(n = 100, ## year vector
+#vector of declining mu, declines by 20% over 25 years
+mu.vec <- sort(stats::runif(n=20,min = -.33,max=0), decreasing =T)
+recdev_sd <- 0.16
+plot(x = 1:20, y = mu.vec, type = "l")
+for(i in 1:nrow(poor_recdevs)){
+    if(i <= 20){
+        poor_recdevs[i,] <- faux::rnorm_multi(n = 100, ## year vector
                                 vars = 1,
-                                mu = -.2,
+                                mu = mu.vec[i],
                                 r = 1-1e-5, #correlation
                                 sd = recdev_sd)[,1]
-}
-matplot(y = poor_recdevs, type = "l")
-abline(h = 0)
+    }else{
+        poor_recdevs[i,] <- faux::rnorm_multi(n = 100, ## year vector
+                                vars = 1,
+                                mu = -.33,
+                                r = 1-1e-5, #correlation
+                                sd = recdev_sd)[,1]
+    }
 
-full_poor_recdevs <- rbind(full_recdevs[1:75,], poor_recdevs) #same recdevs for years 1-75 as full_recdevs, then add poor recdevs for future
+}
+
+matplot(y = poor_recdevs, type = "l")
+full_poor_recdevs <- rbind(new_recdevs, poor_recdevs) #same recdevs for years 1-75 as full_recdevs, then add poor recdevs for future
 matplot(y = full_poor_recdevs, type = "l")
 abline(h = 0)
+abline(v=76)
+abline(v=95)
 # save(list = "full_poor_recdevs", file = file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"))
 
-future_cf <- matrix(data = NA, nrow = 50, ncol = 100)
+# recdev_sd <- 0.2
+# poor_recdevs <- matrix(data = NA, nrow = 50, ncol = 100)
+# for(i in 1:nrow(poor_recdevs)){ 
+#     poor_recdevs[i,] <- faux::rnorm_multi(n = 100, ## year vector
+#                                 vars = 1,
+#                                 mu = -.2,
+#                                 r = 1-1e-5, #correlation
+#                                 sd = recdev_sd)[,1]
+# }
+# matplot(y = poor_recdevs, type = "l")
+# abline(h = 0)
+
+# full_poor_recdevs <- rbind(full_recdevs[1:75,], poor_recdevs) #same recdevs for years 1-75 as full_recdevs, then add poor recdevs for future
+# matplot(y = full_poor_recdevs, type = "l")
+# abline(h = 0)
+# save(list = "full_poor_recdevs", file = file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"))
+```
+
+## Simulating F trajectory
+```{r}
 for(i in 1:nrow(future_cf)){ 
     future_cf[i,] <- faux::rnorm_multi(n = 100, ## year vector
                                 vars = 1,
@@ -199,7 +232,7 @@ for(I in 11:niter){
 }
 
 
-rep <- SS_output(file.path(main.dir, "SQ_5_yrfwd", "1", "em"))
+rep <- SS_output(file.path(main.dir, "HRF_15_yrfwd", "1", "em"))
 SS_plots(rep)
 dat <- SS_readdat_3.30(file.path(main.dir, "SQhyperstable_15_yrfwd", "1", "om", "data_expval.ss"))
 cpue <- dat$CPUE %>% filter(index == 1) %>% pull(obs)
@@ -210,26 +243,44 @@ hscpue <- c(cpue[1:75],(cpue[76:90]^beta.1)*(means$mvb[1]/means$mvbb[1]))
 plot(x = 1:90, y = cpue, type = "l")
 lines(x = 1:90, y = hscpue, col = "orange")
 
-reps <- SSgetoutput(dirvec = c(file.path(main.dir, "SQ_15_yrfwd", "1", "om"),
-file.path(main.dir, "SQ_15_yrfwd", "1", "em"),
-file.path(main.dir, "SQhyperstable_15_yrfwd", "1", "om"),
-file.path(main.dir, "SQhyperstable_15_yrfwd", "1", "em")
+reps <- SSgetoutput(dirvec = c(#file.path(main.dir, "SQ_15_yrfwd", "1", "om"),
+file.path(main.dir, "sigmaR_tests", "sigR_25"),
+file.path(main.dir, "sigmaR_tests", "sigR_75")
 ))
-reps <- SSgetoutput(dirvec = c(file.path(main.dir, "models", "03-simplified-mod"),
-file.path(main.dir, "Model_Runs", "1", "om"),
-file.path(main.dir, "Model_Runs", "2", "om"),
-file.path(main.dir, "Model_Runs", "3", "om"),
-file.path(main.dir, "Model_Runs", "4", "om"),
-file.path(main.dir, "Model_Runs", "5", "om"),
-file.path(main.dir, "Model_Runs", "6", "om"),
-file.path(main.dir, "Model_Runs", "7", "om"),
-file.path(main.dir, "Model_Runs", "8", "om"),
-file.path(main.dir, "Model_Runs", "9", "om"),
-file.path(main.dir, "Model_Runs", "10", "om")
+
+rep_1 <- SS_output(dir = dir, covar = FALSE, verbose = FALSE,
+    forecast = forecastTF, warn = FALSE,
+    readwt = FALSE, printstats = FALSE, NoCompOK = TRUE)
+reps <- SSgetoutput(dirvec = c(#file.path(main.dir, "SQ_15_yrfwd", "1", "om"),
+file.path(main.dir, "SQ_15_yrfwd", "1", "em"),
+file.path(main.dir, "SQ_15_yrfwd", "2", "om"),
+file.path(main.dir, "SQ_15_yrfwd", "2", "em"),
+file.path(main.dir, "SQ_15_yrfwd", "3", "om"),
+file.path(main.dir, "SQ_15_yrfwd", "3", "em"),
+file.path(main.dir, "SQ_15_yrfwd", "4", "om"),
+file.path(main.dir, "SQ_15_yrfwd", "4", "em"),
+file.path(main.dir, "SQ_15_yrfwd", "5", "om"),
+file.path(main.dir, "SQ_15_yrfwd", "5", "em")
 ))
 reps_sum <- SSsummarize(reps)
-SSplotComparisons(reps_sum, legendlabels = c("reg_om", "reg_em", "poorrec_om", "hyperstable_em"))
+SSplotComparisons(reps_sum, legendlabels = c( "reg_em", "hyperstable_em", "poor_rec"))
 SSplotComparisons(reps_sum, legendlabels = c("reg_om", "reg_em", "poorrec_om", "hyperstable_em"), print = T, plotdir = main.dir)
+
+SSplotComparisons(reps_sum, subplots = 11, legendlabels = c("sigmaR=0.25", "sigmaR=0.75"))
+
+SS_plots(reps$replist3)
+SS_plots(reps$replist4)
+
+reps_sum$indices %>% filter(Fleet == 3) %>% 
+mutate(name = recode(name, replist1 = "reg_em", replist2 = "hyperstable_em", replist3 = "poor_rec_em")) %>%
+ggplot(aes(x = Yr, group = name)) +
+geom_jitter(aes(y = Obs, color = name), size = 2, width = .2) + 
+geom_line(aes(y = Exp, color = name), linewidth = 1.5) +
+labs(x = "Year", y = "FRS Index") + 
+theme_classic() +
+theme(legend.position = "top",
+legend.text = element_text(size = 12))
+
 ```
 
 ## Adding future data to model 
@@ -551,12 +602,12 @@ theme_bw()
 
 ```{r}
 #em_I <- paste0("em_", n_yrs_fwd)
-em_I <- "em"
-Iteration <- 11
-like_dir <- file.path(main.dir, "Model_Runs", Iteration, em_I, "likelihood_prof")
+em_I <- "HRF_15_yrfwd"
+Iteration <- 1
+like_dir <- file.path(main.dir, "sigmaR_tests", "sigR_75","likelihood_prof")
 dir.create(like_dir)
-files <- c("ss3.dat", "control.ss_new", "starter.ss", "forecast.ss", "ss.par", "ss.exe")
-file.copy(from = file.path(main.dir, "Model_Runs", Iteration, em_I, files), to = like_dir)
+files <- c("ss3.dat", "control.ss_new", "starter.ss", "forecast.ss", "ss.par", "ss3.exe")
+file.copy(from = file.path(main.dir, em_I, Iteration,"em", files), to = like_dir)
 CTL <- SS_readctl_3.30(file = file.path(like_dir, "control.ss_new"), datlist = file.path(like_dir, "ss3.dat"))
 r0 <- CTL$SR_parms$INIT[1]
 r0_vec <- seq(r0 - 1, r0 + 1, by = 0.2)
@@ -569,12 +620,12 @@ likes <- profile(
   newctlfile = "control_modified.ss",
   string = "SR_LN",
   profilevec = r0_vec,
-  exe = "ss",
+  #exe = "ss3",
   verbose = FALSE,
   extras="-nohess -nox"
 )
 
-profile_mods <- SSgetoutput(dirvec = like_dir, keyvec = c(1:11))
+profile_mods <- SSgetoutput(dirvec = like_dir, keyvec = c(1:5,7,10))
 profile_mods_sum <- SSsummarize(profile_mods)
 profile_mods_sum$maxgrad <= 1e-4
 
@@ -586,7 +637,7 @@ SSplotProfile(profile_mods_sum,
 
 )
 PinerPlot(profile_mods_sum, component = "Length_like", print = TRUE, plotdir = like_dir)
-PinerPlot(profile_mods_sum, component = "Surv_like", print = TRUE, plotdir = like_dir)
+PinerPlot(profile_mods_sum, component = "Surv_like")
 
 
 

@@ -75,6 +75,7 @@ ggplot() +
 geom_hline(yintercept = 0, color = "grey60") +
 geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scenario), alpha = .5) + 
 geom_line(aes(x = year, y = med_re, color = scenario), linewidth = 1.2) +
+facet_wrap(~scenario) + 
 labs(x = "Year", y = "SSB MRE") + 
 theme_bw()
 
