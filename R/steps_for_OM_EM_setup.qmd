@@ -28,7 +28,7 @@ select(c(Label, Value)) %>%
 separate(col = Label, sep = "_", into = c("period", "recdev", "year")) 
 
 plot(x = recdevs_df$year, y = recdevs_df$Value, type = "l")
-
+sigmar <- .657 #from opaka model
 new_recdevs <- matrix(data = NA, nrow = nrow(recdevs_df)+1, ncol = 100)
 new_recdevs[1,] <- 0
 for(i in 2:nrow(new_recdevs)){
@@ -38,35 +38,33 @@ for(i in 2:nrow(new_recdevs)){
                                  vars = 1,
                                  mu = recdevs_df$Value[i-1],
                                  r = 1-1e-5, #correlation
-                                 sd = recdev_sd)[,1]   
-    }else{
-        recdev_sd <- 0.16
-        new_recdevs[i,] <- faux::rnorm_multi(n = 100, ## year vector
-                                 vars = 1,
-                                 mu = 0,
-                                 r = 1-1e-5, #correlation
                                  sd = recdev_sd)[,1]
+    }else{
+        recdev_sd <- 0.14 #(sigmar^2/2 lognormal bias correction?)
+        recdevs <- rnorm(n = 100, mean = 0, sd = sigmar)  
+        new_recdevs[i,] <- sigmar * recdevs - sigmar^2 / 2 
+        # new_recdevs[i,] <- faux::rnorm_multi(n = 100, ## year vector
+        #                          vars = 1,
+        #                          mu = 0,
+        #                          r = 1-1e-5, #correlation
+        #                          sd = recdev_sd)[,1]
     }
 
 
 }
 matplot(new_recdevs, type = "l")
 
-# png(file.path(main.dir, "Model_Runs", '2024-9-03-rdevs_array.png'), height = 8, width =8, unit = 'in', res =400)
+# png(file.path(main.dir, "Model_Runs", '2024-12-03-rdevs_array.png'), height = 8, width =8, unit = 'in', res =400)
 matplot(y = new_recdevs, type = "l", lty = 1, lwd = 1.2)
 abline(h = 0)
-lines(x = 2:75, y = recdevs_df$Value, col = "red", lwd = 2)
+#lines(x = 2:75, y = recdevs_df$Value, col = "red", lwd = 2, lty = 2)
 # dev.off()
 # save(list = "new_recdevs", file = file.path(main.dir, "Inputs", "recdevs_mat.RData"))
 
-recdev_sd <- 0.16
 future_recdevs <- matrix(data = NA, nrow = 50, ncol = 100)
 for(i in 1:nrow(future_recdevs)){ 
-    future_recdevs[i,] <- faux::rnorm_multi(n = 100, ## year vector
-                                vars = 1,
-                                mu = 0,
-                                r = 1-1e-5, #correlation
-                                sd = recdev_sd)[,1]
+    recdevs <- rnorm(n = 100, mean = 0, sd = 0.)   
+    future_recdevs[i,] <- sigmar * recdevs - sigmar^2 / 2 
 }
 matplot(y = future_recdevs, type = "l")
 
@@ -76,23 +74,18 @@ matplot(y = full_recdevs, type = "l")
 
 ## years of poor recruitment in the future
 poor_recdevs <- matrix(data = NA, nrow = 50, ncol = 100)
-#vector of declining mu, declines by 20% over 25 years
-mu.vec <- sort(stats::runif(n=20,min = -.33,max=0), decreasing =T)
-recdev_sd <- 0.16
+#vector of declining mu, declines by 40% over 25 years
+mu.vec <- sort(stats::runif(n=20,min = -.40,max=0), decreasing =T)
+recdev_sd <- .52 #half of sigmaR? Check about log scale
 plot(x = 1:20, y = mu.vec, type = "l")
 for(i in 1:nrow(poor_recdevs)){
     if(i <= 20){
-        poor_recdevs[i,] <- faux::rnorm_multi(n = 100, ## year vector
-                                vars = 1,
-                                mu = mu.vec[i],
-                                r = 1-1e-5, #correlation
-                                sd = recdev_sd)[,1]
+        recdevs <- rnorm(n = 100, mean = mu.vec[i], sd = recdev_sd)  
+        poor_recdevs[i,] <- recdev_sd * recdevs - recdev_sd^2 / 2 
+        
     }else{
-        poor_recdevs[i,] <- faux::rnorm_multi(n = 100, ## year vector
-                                vars = 1,
-                                mu = -.33,
-                                r = 1-1e-5, #correlation
-                                sd = recdev_sd)[,1]
+        recdevs <- rnorm(n = 100, mean = -.4, sd = recdev_sd)  
+        poor_recdevs[i,] <- recdev_sd * recdevs - recdev_sd^2 / 2
     }
 
 }
@@ -103,6 +96,7 @@ matplot(y = full_poor_recdevs, type = "l")
 abline(h = 0)
 abline(v=76)
 abline(v=95)
+# lines(x = 76:95, y = mu.vec, lty = 2, col = "red")
 # save(list = "full_poor_recdevs", file = file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"))
 
 # recdev_sd <- 0.2
@@ -133,6 +127,7 @@ for(i in 1:nrow(future_cf)){
                                 sd = 0.0075)[,1]
 }
 matplot(y = future_cf, type = "l", lty = 1, lwd = 1.2)
+F_comm_mod <- rep$exploitation$Comm[-1]
 F_comm_df <- matrix(data = rep(F_comm_mod, 100), nrow = 75, ncol = 100,byrow = F)
 F_comm_df <- rbind(F_comm_df, future_cf)
 F_noncomm_mod <- rep$exploitation$Non_comm[-1]
@@ -140,6 +135,29 @@ F_noncomm_df <- matrix(data = rep(F_noncomm_mod, 100), nrow = 75, ncol = 100,byr
 F_noncomm_df <- rbind(F_noncomm_df, future_cf * 1.03)
 # save(list = c("F_noncomm_df", "F_comm_df"), file = file.path(main.dir, "Inputs", "constantF_mat.RData"))
 
+## Increasing F
+F_up_mu <- seq(F_comm_mod[75], 0.0491544, length.out = 20) #increase back up to 75 percentile of historical Fs
+future_F_up <- matrix(data = NA, nrow = 50, ncol = 100)
+for(i in 1:nrow(future_F_up)){
+    if(i <=20){
+         future_F_up[i, ] <- faux::rnorm_multi(n = 100, ## year vector
+                                vars = 1,
+                                mu = F_up_mu[i], # increasing F trajectory
+                                r = 1-1e-5, #correlation
+                                sd = 0.0015)[,1]
+    }else{
+        future_F_up[i, ] <- faux::rnorm_multi(n = 100, ## year vector
+                            vars = 1,
+                            mu = F_up_mu[20], # stay around the last year of increasing 
+                            r = 1-1e-5, #correlation
+                            sd = 0.0015)[,1]
+    }
+
+}
+matplot(y = future_F_up, type = "l", lty = 1, lwd = 1.2)
+F_comm_up <- rbind(F_comm_df, future_F_up)
+F_noncomm_up <- rbind(F_noncomm_df, future_F_up * 1.03)
+# save(list = c("F_noncomm_up", "F_comm_up"), file = file.path(main.dir, "Inputs", "increaseF_mat.RData"))
 ```
 
 ### Load already created RecDev-vectors and get F from simplified model
@@ -149,6 +167,7 @@ F_noncomm_mod <- rep$exploitation$Non_comm[-1]
 load(file.path(main.dir, "Inputs", "recdevs_mat.RData"))
 load(file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"))
 load(file.path(main.dir, "Inputs", "constantF_mat.RData"))
+load(file.path(main.dir, "Inputs", "increaseF_mat.RData"))
 ```
 
 
@@ -168,12 +187,13 @@ This loop can be run for each scenario to create the starting OM and EMs. To dis
 ```{r}
 
 #recdev0 <- matrix(data = 0, nrow = 75, ncol = niter) #for testing deterministic runs with no rec-devs
-nyears <- 90
-nyears_fwd <- 15
-om_dir <- file.path(main.dir, "models", paste0("opaka-om-", nyears_fwd)) #-5 -15 -25 -50
-em_dir <- file.path(main.dir, "models", paste0("opaka-em-", nyears_fwd)) #-5 -15 -25 -50
+nyears <- 75
+nyears_fwd <- 0
+om_dir <- file.path(main.dir, "models", paste0("opaka-om"))#, nyears_fwd)) #-5 -15 -25 -50
+em_dir <- file.path(main.dir, "models", paste0("opaka-em"))#, nyears_fwd)) #-5 -15 -25 -50
 
-sub_poor_recdevs <- full_poor_recdevs[1:80,]
+scen <- "no_var"
+sas <- sas_full %>% filter(Scen_name == scen)
 
 for(I in 11:niter){
     # Get F-vector 
@@ -188,11 +208,11 @@ for(I in 11:niter){
         fleets = c(1, 3), 
         years = list(seq(1, nyears, by = 1), seq(69, nyears, by = 1)),
         seas = list(7,1), 
-        sds_obs = list(0.13, sas[which(sas$N_years == nyears_fwd), "Resfish_index_CV"]) 
+        sds_obs = list(0.01, sas[which(sas$N_years == nyears_fwd), "Resfish_index_CV"]) 
     )
 
     lcomp <- list(
-        fleets = c(3), Nsamp = list(sas[which(sas$N_years == nyears_fwd), "Neff_len_Resfish"]),
+        fleets = c(3), Nsamp = list(100),
         years = list(seq(69, nyears, by = 1))
     )
 
@@ -214,7 +234,8 @@ for(I in 11:niter){
         em_dir = em_dir,
         user_recdevs = full_recdevs,
         bias_adjust = T,
-        seed = seed
+        seed = seed,
+        extra = "-nohess"
     )
 
     om_dat <- SS_readdat_3.30(file = file.path(main.dir, "Model_Runs", I, "om", "ss3.dat"))
@@ -232,7 +253,7 @@ for(I in 11:niter){
 }
 
 
-rep <- SS_output(file.path(main.dir, "HRF_15_yrfwd", "1", "em"))
+rep <- SS_output(file.path(main.dir, "SQ_0_yrfwd", "1", "em"))
 SS_plots(rep)
 dat <- SS_readdat_3.30(file.path(main.dir, "SQhyperstable_15_yrfwd", "1", "om", "data_expval.ss"))
 cpue <- dat$CPUE %>% filter(index == 1) %>% pull(obs)
@@ -244,39 +265,88 @@ plot(x = 1:90, y = cpue, type = "l")
 lines(x = 1:90, y = hscpue, col = "orange")
 
 reps <- SSgetoutput(dirvec = c(#file.path(main.dir, "SQ_15_yrfwd", "1", "om"),
-file.path(main.dir, "sigmaR_tests", "sigR_25"),
-file.path(main.dir, "sigmaR_tests", "sigR_75")
+file.path(main.dir, "no_var_0_yrfwd", "1", "om"),
+file.path(main.dir, "no_var_0_yrfwd", "1", "em")
 ))
 
 rep_1 <- SS_output(dir = dir, covar = FALSE, verbose = FALSE,
     forecast = forecastTF, warn = FALSE,
     readwt = FALSE, printstats = FALSE, NoCompOK = TRUE)
-reps <- SSgetoutput(dirvec = c(#file.path(main.dir, "SQ_15_yrfwd", "1", "om"),
-file.path(main.dir, "SQ_15_yrfwd", "1", "em"),
-file.path(main.dir, "SQ_15_yrfwd", "2", "om"),
-file.path(main.dir, "SQ_15_yrfwd", "2", "em"),
-file.path(main.dir, "SQ_15_yrfwd", "3", "om"),
-file.path(main.dir, "SQ_15_yrfwd", "3", "em"),
-file.path(main.dir, "SQ_15_yrfwd", "4", "om"),
-file.path(main.dir, "SQ_15_yrfwd", "4", "em"),
-file.path(main.dir, "SQ_15_yrfwd", "5", "om"),
-file.path(main.dir, "SQ_15_yrfwd", "5", "em")
+reps <- SSgetoutput(dirvec = c(
+#  file.path(main.dir, "HRFhyperstable_15_yrfwd", "1", "om"),
+#  file.path(main.dir, "HRFhyperstable_15_yrfwd", "1", "em"),
+#  file.path(main.dir, "HRFhyperstable_15_yrfwd", "2", "om"),
+#  file.path(main.dir, "HRFhyperstable_15_yrfwd", "2", "em"),
+#  file.path(main.dir, "HRFhyperstable_15_yrfwd", "3", "om"),
+#  file.path(main.dir, "HRFhyperstable_15_yrfwd", "3", "em"),
+#  file.path(main.dir, "HRFhyperstable_15_yrfwd", "4", "om"),
+#  file.path(main.dir, "HRFhyperstable_15_yrfwd", "4", "em"),
+#  file.path(main.dir, "HRFhyperstable_15_yrfwd", "5", "om"),
+#  file.path(main.dir, "HRFhyperstable_15_yrfwd", "5", "em")
+# file.path(main.dir, "SQpoorrec_15_yrfwd", "1", "om"),
+# file.path(main.dir, "SQpoorrec_15_yrfwd", "1", "em"),
+# file.path(main.dir, "SQpoorrec_15_yrfwd", "2", "om"),
+# file.path(main.dir, "SQpoorrec_15_yrfwd", "2", "em"),
+# file.path(main.dir, "SQpoorrec_15_yrfwd", "3", "om"),
+# file.path(main.dir, "SQpoorrec_15_yrfwd", "3", "em"),
+# file.path(main.dir, "SQpoorrec_15_yrfwd", "4", "om"),
+# file.path(main.dir, "SQpoorrec_15_yrfwd", "4", "em"),
+# file.path(main.dir, "SQpoorrec_15_yrfwd", "5", "om"),
+# file.path(main.dir, "SQpoorrec_15_yrfwd", "5", "em")
+# file.path(main.dir, "SQpoorrec_15_yrfwd", "6", "om"),
+# file.path(main.dir, "SQpoorrec_15_yrfwd", "6", "em"),
+# file.path(main.dir, "SQpoorrec_15_yrfwd", "7", "om"),
+# file.path(main.dir, "SQpoorrec_15_yrfwd", "7", "em")
+#  file.path(main.dir, "SQ_0_yrfwd", "1", "om"),
+#  file.path(main.dir, "SQ_0_yrfwd", "1", "em"),
+ file.path(main.dir, "SQ_0_yrfwd", "11", "om"),
+ file.path(main.dir, "SQ_0_yrfwd", "11", "em"),
+ file.path(main.dir, "SQ_0_yrfwd", "12", "om"),
+ file.path(main.dir, "SQ_0_yrfwd", "12", "em"),
+ file.path(main.dir, "SQ_0_yrfwd", "13", "om"),
+ file.path(main.dir, "SQ_0_yrfwd", "13", "em"),
+ file.path(main.dir, "SQ_0_yrfwd", "14", "om"),
+ file.path(main.dir, "SQ_0_yrfwd", "14", "em"),
+ file.path(main.dir, "SQ_0_yrfwd", "15", "om"),
+ file.path(main.dir, "SQ_0_yrfwd", "15", "em")
 ))
+
+mod_dirs <- list.dirs(path = file.path(main.dir, "SQ_0_yrfwd"), full.names = T, recursive = T)
+om_em_dirs <- mod_dirs[str_detect(mod_dirs, "om|em")]
+om_em_dirs <- om_em_dirs[str_detect(om_em_dirs, "bias_00", negate = T)]
+reps <- SSgetoutput(dirvec = om_em_dirs[c(1,2,25,26,47,48,69,70,91,92, 113, 114, 135, 136,157,158,179,180,3,4)])
 reps_sum <- SSsummarize(reps)
-SSplotComparisons(reps_sum, legendlabels = c( "reg_em", "hyperstable_em", "poor_rec"))
+SSplotComparisons(reps_sum, legendlabels = c("om1", "em1", "om2", "em2", "om3", "em3", "om4", "em4", "om5", "em5"))
 SSplotComparisons(reps_sum, legendlabels = c("reg_om", "reg_em", "poorrec_om", "hyperstable_em"), print = T, plotdir = main.dir)
 
-SSplotComparisons(reps_sum, subplots = 11, legendlabels = c("sigmaR=0.25", "sigmaR=0.75"))
-
-SS_plots(reps$replist3)
+SSplotComparisons(reps_sum, col = c(1,1,2,2,3,3,4,4,5,5), lty = rep(c(1,2), 5))
+SSplotComparisons(reps_sum, models = c(1,2,25,26,47,48,69,70,91,92), subplots = c(1,7,9,11,13)) 
 SS_plots(reps$replist4)
+SS_plots(reps$replist8)
 
-reps_sum$indices %>% filter(Fleet == 3) %>% 
-mutate(name = recode(name, replist1 = "reg_em", replist2 = "hyperstable_em", replist3 = "poor_rec_em")) %>%
-ggplot(aes(x = Yr, group = name)) +
-geom_jitter(aes(y = Obs, color = name), size = 2, width = .2) + 
-geom_line(aes(y = Exp, color = name), linewidth = 1.5) +
-labs(x = "Year", y = "FRS Index") + 
+reps$replist2$breakpoints_for_bias_adjustment_ramp
+new_bias <- SS_fitbiasramp(reps$replist4)
+
+reps_sum$indices %>% filter(Fleet == 3) %>% #filter(name == "replist1" | name == "replist2") %>%
+mutate(name = recode(name, 
+                    replist1 = "om_1", 
+                    replist2 = "em_1", 
+                    replist3 = "om_2",
+                    replist4 = "em_2",
+                    replist5 = "om_3",
+                    replist6 = "em_3",
+                    replist7 = "om_4",
+                    replist8 = "em_4",
+                    replist9 = "om_5",
+                    replist10 = "em_5"
+                    )) %>%
+separate(name, sep = "_", into = c("mod_type", "rep")) %>%
+ggplot(aes(x = Yr)) +
+geom_point(data = . %>% filter(mod_type == "om"), aes(y = Exp, color = mod_type)) + 
+geom_point(data = . %>% filter(mod_type == "em"), aes(y = Obs, color = mod_type)) + 
+geom_line(data = . %>% filter(mod_type == "em"), aes(y = Exp, color = mod_type), linewidth = 1.5) +
+facet_wrap(~rep) +
+labs(x = "Year", y = "BFISH Index") + 
 theme_classic() +
 theme(legend.position = "top",
 legend.text = element_text(size = 12))
@@ -303,75 +373,6 @@ Questions from Ono et al. 2015
 4. What is the impact of historical fishery composition data? 
 5. What is the impact of composition data sample size? 
 6. Which fishing pattern produces the most informative data? 
-
-```{r}
-
-n_yrs_fwd <- 5
-rec_devs <- rbind(new_recdevs, future_recdevs)
-for(I in 2:niter){
-    # Get F-vector 
-    #F_comm_mod <- c(F_comm_mod, rep(F_comm_mod[75], 5))
-    #F_comm_mod <- c(F_noncomm_mod, rep(F_noncomm_mod[75], 5))
-    F_list <- list(
-        years = list(1:80, 1:80),
-        fleets = c(1, 2), 
-        fvals = list(c(F_comm_mod, future_cf[1:n_yrs_fwd]), 
-        c(F_noncomm_mod, future_cf[1:n_yrs_fwd] * 1.03))
-        #fvals = list(F_vec_mat[I,], F_noncomm)
-        )
-    #create sampling scheme for indices of abundance
-    index <- list(
-        fleets = c(1,3), years = list(seq(1, 80, by = 1), seq(69, 80, by = 1)),
-        seas = list(7,1), sds_obs = list(0.13, 0.25)
-        )
-    lcomp <- list(
-        fleets = c(3), Nsamp = list(75),
-        years = list(seq(69, 80, by = 1))
-        )
-
-    agecomp <- list(
-        fleets = c(3), Nsamp = list(10),
-        years = list(seq(69, 80, by = 1))
-        )
-
-    ss3sim_base(
-        iterations = I,
-        scenarios = "5yr_cF", 
-        f_params = F_list,
-        index_params = index,
-        lcomp_params = lcomp,
-        agecomp_params = agecomp,
-        om_dir = om_dir,
-        em_dir = em_dir,
-        user_recdevs = rec_devs[1:80,], #row = years, col = iterations
-        bias_adjust = F
-        )
-
-    om_dat <- SS_readdat_3.30(file = file.path(main.dir, "5yr_cF", I, "om", "ss3.dat"))
-    om_dat$Nsexes <- -1
-    SS_writedat(om_dat, file.path(main.dir, "5yr_cF", I, "om", "ss3.dat"), overwrite = T)
-    r4ss::run(dir = file.path(main.dir, "5yr_cF", I, "om"), exe = "ss", extras = "-nohess", skipfinished = F)
-
-    em_dat <- SS_readdat_3.30(file = file.path(main.dir, "5yr_cF", I, "em", "ss3.dat"))
-    em_dat$Nsexes <- -1
-    SS_writedat(em_dat, file.path(main.dir, "5yr_cF", I, "em", "ss3.dat"), overwrite = T)
-    r4ss::run(dir = file.path(main.dir, "5yr_cF", I, "em"), exe = "ss", skipfinished = F)
-    rm(list = c("om_dat", "em_dat"))
-    
-
-}
-
-reps <- SSgetoutput(dirvec = c(
-file.path(main.dir, "5yr_cF", "1", "em"),
-file.path(main.dir, "5yr_cF", "2", "em"),
-file.path(main.dir, "5yr_cF", "3", "em"),
-file.path(main.dir, "5yr_cF", "4", "em"),
-file.path(main.dir, "5yr_cF", "5", "em")))
-reps_sum <- SSsummarize(reps)
-SSplotComparisons(reps_sum)
-```
-
-
 
 
 ```{r}
@@ -499,128 +500,171 @@ SS_plots(rep)
 
 ```
 
+### Run likelihood profiles
+To profile over an F value for a given year, use the following code: 
 
-## Get results from runs for model comparisons
 ```{r}
+em_I <- "SQ_0_yrfwd"
+Iteration <- 5
+nyears <- 75
+like_dir <- file.path(main.dir, em_I, Iteration, "em", "likelihood_prof")
+dir.create(like_dir)
+files <- c("ss3.dat", "control.ss_new", "starter.ss", "forecast.ss")
+file.copy(from = file.path(main.dir, em_I, Iteration,"em", files), to = like_dir, overwrite = T)
+file.copy(from = file.path(main.dir, "bin", "ss3_win.exe"), to = like_dir, overwrite = T)
+## Create fvec of values to profile over
+rep_tmp <- SS_output(file.path(main.dir, em_I, Iteration, "em"), verbose = F)
+fest <- rep_tmp$exploitation %>% filter(Yr == nyears) %>% pull(Comm)
+fvec <- seq(fest - 0.01, fest + 0.02, by = 0.001)
+fdf <- rep_tmp$exploitation %>% 
+select(Yr, Seas, Comm, Non_comm) %>%
+pivot_longer(cols = c("Comm", "Non_comm")) %>% 
+mutate(Fleet = recode(name, Comm = "1", Non_comm = "2"),
+Fleet = as.numeric(Fleet),
+se = 0.5,
+phase = -1) %>%
+filter(Yr > 0) %>%
+arrange(Fleet, Yr) %>% 
+select(Fleet, Yr, Seas, value, se, phase) 
 
-get_results_all(
-    overwrite_files = T,
-    user_scenarios = "opaka-sim"
-)
-get_fits_all(
-    overwrite_files = T,
-    user_scenarios = "opaka-sim")
+## Fix selex first 
+CTL <- SS_readctl_3.30(file.path(like_dir, "control.ss_new"), datlist = file.path(like_dir, "ss3.dat"))
+CTL$size_selex_parms$PHASE <- abs(CTL$size_selex_parms$PHASE) * -1
+SS_writectl_3.30(CTL, outfile = file.path(like_dir, "control.ss_new"), overwrite = T)
+rm(CTL)
+## read in ctl file
+CTL <- readLines(file.path(like_dir, "control.ss_new"))
+# selex_lines <- grep("#_SizeSelex", CTL)
+# end_selex_lines <- grep("#_AgeSelex", CTL)
+# selex_params <- CTL[(selex_lines+2):(end_selex_lines-1)]
+# selex <- strsplit(selex_params, " ")
+# selex_new <- list()
+# for(i in 1:length(selex)){
+#     ind <- which(selex[[i]] == 3)
+#     if(length(ind) == 1){
+#         selex[[i]][ind] <- "-3"
+#     }
+#     selex[[i]] <- selex[[i]][-which(selex[[i]] == "")]
+#     selex_new[[i]] <- str_flatten(selex[[i]], collapse =  " ")
+# }
+# ## replace selex values
+# CTL[237] <- selex_new[[1]]
+# CTL[238] <- selex_new[[2]]
+# CTL[239] <- selex_new[[3]]
+# CTL[240] <- selex_new[[4]]
+# CTL[241] <- selex_new[[5]]
+# CTL[242] <- selex_new[[6]]
 
-results_ts <- read.csv(file.path(main.dir, "opaka-sim", "results_ts_opaka-sim.csv"))
-head(results_ts)
-results_dq <- read.csv(file.path(main.dir, "opaka-sim", "results_dq_opaka-sim.csv"))
-head(results_dq)
-results_scalar <- read.csv(file.path(main.dir, "opaka-sim", "results_scalar_opaka-sim.csv"))
-head(results_scalar)
-length(which(results_scalar$max_grad <= 1e-4))
-converged_its <- results_scalar %>% filter(str_detect(model_run, "em")) %>% filter(max_grad <= 1e-4)
+## find lines where to break the file and insert new lines
+start_ind <- grep("#Fishing Mortality info", CTL)
+end_ind <- grep("#_initial_F_parms", CTL)
 
-paste0(results_scalar[which(results_scalar$max_grad <= 1e-4),"model_run"], "_", results_scalar[which(results_scalar$max_grad <= 1e-4),"iteration"])
+f_setup <- paste0("## add new fishing mortality info \n",
+"#Fishing Mortality info \n",
+"0.3 # F ballpark value in units of annual_F \n",
+"-2001 # F ballpark year (neg value to disable) \n",
+"4 # F_Method:  1=Pope midseason rate; 2=F as parameter; 3=F as hybrid; 4=fleet-specific parm/hybrid (#4 is superset of #2 and #3 and is recommended) \n",
+"2.9 # max F (methods 2-4) or harvest fraction (method 1) \n",
+"#fleet parameter_value phase \n",
+"1 0.015 1 \n",
+"2 0.015 1 \n",
+"-9998 1 1 \n",
+"3 #Ntuning loops \n",
+"# detailed setup for F_Method=2; -Yr to fill remaining years \n",
+"#Fleet Yr Seas F_value se phase \n")
 
-fits_inds <- read.csv(file.path(main.dir, "opaka-sim", "fits_index_opaka-sim.csv"))
-head(fits_inds)
-fits_inds$residuals <- (log(fits_inds$Obs) - log(fits_inds$Exp))
-
-fits_inds %>%
-filter(model_run != "om") %>%
-ggplot(aes(x = year, y = residuals)) + 
-geom_hline(yintercept = 0, linetype = 2, color = "grey50") +
-geom_segment(aes(x = year, y = 0, yend = residuals)) +
-geom_point(aes(color = factor(iteration))) + 
-geom_smooth() +
-facet_wrap(~Fleet_name, scales = "free_x") + 
-ylim(-.5, .5) +
-theme_classic()
-
-## calculate relative error ((EM-OM)/OM) of parameters and derived quants
-om_ems <- list(c("om", "em"), c(om_I, em_I))
-re_list <- lapply(om_ems,function(x){
-    calculate_re_MO(results_scalar, EM = x[2], OM = x[1])
-})
-
-## Plot SB comparison between OM and EM
-re_ts_df %>%
-# mutate(model_run_iteration = paste(model_run, iteration, sep = "_")) %>%
-# filter(year > 0 & model_run_iteration %in% converged_its) %>%
-ggplot() +
-geom_hline(yintercept = 0, color = "grey60") +
-geom_line(aes(x = year, y = SpawnBio_re, color = model_run, group = model_run), linewidth = 1.2) +
-facet_wrap(~iteration) +
-labs(x = "Year", y = "SSB") + 
-theme_bw()
-
-#plot recdev comparisons
-results_ts %>% 
-filter(iteration %in% converged_its$iteration) %>%
-ggplot(aes(x = year)) + 
-geom_hline(yintercept = 0, color = "grey50") + 
-geom_point(aes(y = rec_dev, color = model_run)) + 
-facet_wrap(~iteration) +
-labs(x = "Year", y = "Recruitment Deviations") +
-theme_bw()
-
-#plot F comparisons
-results_dq %>% 
-filter(iteration %in% converged_its) %>%
-ggplot(aes(x = year, y = Value.F)) + 
-geom_line(aes(color = model_run), linewidth =1.5) + 
-facet_wrap(~iteration) + 
-labs(x = "Year", y = "F") + 
-theme_bw()
+f_detailed_ender <- " -9999 1 1 1 1 1 \n"
 
 
-#plot CPUE comparison for commercial fleet
-inds_reduced %>%
-ggplot(aes(x = Yr)) + 
-geom_point(data = . %>% filter(Model == "o" & Fleet == 1), aes(y = Exp), color = "#00BFC4") +
-geom_point(data = . %>% filter(Model == "e" & Fleet == 1), aes(y = Obs), color = "#F8766D") +
-geom_line(data = . %>% filter(Model == "e" & Fleet == 1), aes(y = Exp), color = "#F8766D") +
-facet_wrap(~Iteration) + 
-labs(x = "Year", y = "CPUE") +
-theme_bw()
+## write out new ctl file
+writeLines(CTL[1:(start_ind -1)], file.path(like_dir, "control_modified.ss"))
+CON <- file(file.path(like_dir, "control_modified.ss"), "a")
+cat(f_setup, file = CON)
+write.table(fdf, file = CON, append = T, col.names = F, row.names = F)
+cat(f_detailed_ender, file = CON) 
+writeLines(CTL[end_ind:length(CTL)], CON)
+close(CON)
 
-#plot indices comparison for research fishing
-inds_reduced %>%
-ggplot(aes(x = Yr)) + 
-geom_point(data = . %>% filter(Model == "o" & Fleet == 3), aes(y = Exp), color = "#00BFC4") +
-geom_point(data = . %>% filter(Model == "e" & Fleet == 3), aes(y = Obs), color = "#F8766D") +
-geom_line(data = . %>% filter(Model == "e" & Fleet == 3), aes(y = Exp), color = "#F8766D") +
-facet_wrap(~Iteration) + 
-labs(x = "Year", y = "Index") +
-theme_bw()
+#adjust se for catch 
+dat <- SS_readdat_3.30(file = file.path(like_dir, "ss3.dat"), verbose = F)
+dat$catch$catch_se <- .5
+SS_writedat(dat, outfile = file.path(like_dir, "ss3.dat"), overwrite = T)
+## Create profile directories
+profile_dirs <- paste0(like_dir, "/profile_", seq(1,length(fvec)))
+sapply(profile_dirs, dir.create)
+profile.files <- c("ss3.dat", "control_modified.ss", "starter.ss", "forecast.ss", "ss3_win.exe")
+for (i in 1:length(fvec)){
+    file.copy(from = file.path(like_dir, profile.files), to = profile_dirs[i], overwrite = T)
+
+    CTL <- readLines(file.path(profile_dirs[i], "control_modified.ss"))
+    line_ind <- grep(paste0("1 ",nyears, " 1"), CTL)
+    CTL[line_ind] <- paste0("1 ", nyears, " 1 ", fvec[i], " 0.5 -1")
+    writeLines(CTL, file.path(profile_dirs[i], "control_modified.ss"))
+
+    START <- SS_readstarter(file.path(profile_dirs[i], "starter.ss"))
+    START$ctlfile <- "control_modified.ss"
+    START$prior_like <- 1
+    START$init_values_src <- 0
+    SS_writestarter(START, profile_dirs[i], overwrite = T)
+
+    run(dir = profile_dirs[i], exe = "ss3_win.exe", extras = "-nohess", skipfinished = F, verbose = F)
+
+}
+
 
 
 ```
 
 
-### Run likelihood profiles
 
 ```{r}
 #em_I <- paste0("em_", n_yrs_fwd)
-em_I <- "HRF_15_yrfwd"
+em_I <- "HRFhyperstable_15_yrfwd"
 Iteration <- 1
-like_dir <- file.path(main.dir, "sigmaR_tests", "sigR_75","likelihood_prof")
+like_dir <- file.path(main.dir, em_I, Iteration, "em", "likelihood_prof")
 dir.create(like_dir)
 files <- c("ss3.dat", "control.ss_new", "starter.ss", "forecast.ss", "ss.par", "ss3.exe")
-file.copy(from = file.path(main.dir, em_I, Iteration,"em", files), to = like_dir)
+file.copy(from = file.path(main.dir, em_I, Iteration,"em", files), to = like_dir, overwrite = T)
 CTL <- SS_readctl_3.30(file = file.path(like_dir, "control.ss_new"), datlist = file.path(like_dir, "ss3.dat"))
-r0 <- CTL$SR_parms$INIT[1]
-r0_vec <- seq(r0 - 1, r0 + 1, by = 0.2)
+CTL <- SS_readctl_3.30(file = file.path(main.dir, em_I, Iteration, "em", "control.ss_new"), datlist = file.path(main.dir, em_I, Iteration, "em", "ss3.dat"))
+# r0 <- CTL$SR_parms$INIT[1]
+# r0_vec <- seq(r0 - 1, r0 + 1, by = 0.2)
+CTL$F_setup2
+
+par.file <- SS_readpar_3.30(parfile = file.path(like_dir, "ss.par"), datsource = file.path(like_dir, "ss3.dat"), ctlsource = file.path(like_dir, "control.ss_new"))
+F_term <- par.file$F_rate %>% filter(fleet == 1 & year == nyears) %>% pull(F)
+F_term_vec <- seq(F_term - .01, F_term + 0.1, by = 0.005)
+
 START <- SS_readstarter(file = file.path(like_dir, "starter.ss"), verbose = FALSE)
 START$prior_like <- 1
 START$ctlfile <- "control_modified.ss"
+START$init_values_src <- 1
 SS_writestarter(START, dir = like_dir, overwrite = TRUE, verbose = F)
+
+likes <- profile_F(
+  dir = like_dir,
+  newctlfile = "control_modified.ss",
+  linenum = nyears,
+  #string = "Fvalue",
+  profilevec = F_term_vec[10:20],
+  usepar = T,
+  parstring = "# F_rate[90]:",
+  exe = "ss3",
+  verbose = FALSE,
+  extras="-nohess -nox"
+)
+
+
+
 likes <- profile(
   dir = like_dir,
   newctlfile = "control_modified.ss",
-  string = "SR_LN",
-  profilevec = r0_vec,
-  #exe = "ss3",
+  linenum = 241,
+  #string = "Fvalue",
+  profilevec = F_term_vec,
+  usepar = T,
+  parstring = "# F_rate[90]:",
+  exe = "ss3",
   verbose = FALSE,
   extras="-nohess -nox"
 )

@@ -1,4 +1,6 @@
 Scen_name,N_years,F_scen,Neff_len_Resfish,Resfish_index_CV,Neff_age_Resfish,Neff_len_Comm
+no_var,0,cf,100,0.01,10,0
+SQ,0,cf,30,0.24,10,0
 SQ,5,cf,30,0.24,10,0
 SQ,15,cf,30,0.24,10,0
 SQ,25,cf,30,0.24,10,0
@@ -11,6 +13,7 @@ SQhyperstable,5,cf,30,0.24,10,0
 SQhyperstable,15,cf,30,0.24,10,0
 SQhyperstable,25,cf,30,0.24,10,0
 SQhyperstable,50,cf,30,0.24,10,0
+SQpoorrec,0,cf,30,0.24,10,0
 SQpoorrec,5,cf,30,0.24,10,0
 SQpoorrec,15,cf,30,0.24,10,0
 SQpoorrec,25,cf,30,0.24,10,0

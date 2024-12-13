@@ -13,23 +13,24 @@ main.dir <- getwd()
 set.seed <- read.csv(file.path(main.dir, "Inputs", "setseed.csv"))
 sas_full <- read.csv(file.path(main.dir, "Inputs", "sas.csv"))
 load(file.path(main.dir, "Inputs", "constantF_mat.RData"))
+load(file.path(main.dir, "Inputs", "increaseF_mat.RData"))
 load(file.path(main.dir, "Inputs", "recdevs_mat.RData"))
 load(file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"))
 source(file.path(main.dir, "R", "get_fits.r"))
-niter <- 5
+niter <- 15
 #u_vec vector of ratios for calculating non-commercial catch
 #u_vec <- c(rep(1.8, 26), rep(1.47, 29), rep(1.03, 70))
-nyears <- 90
-nyears_fwd <- 15
-om_dir <- file.path(main.dir, "models", paste0("opaka-om-", nyears_fwd)) #-5 -15 -25 -50
-em_dir <- file.path(main.dir, "models", paste0("opaka-em-", nyears_fwd)) #-5 -15 -25 -50
+nyears <- 75
+nyears_fwd <- 0
+om_dir <- file.path(main.dir, "models", paste0("opaka-om"))#, nyears_fwd)) #-5 -15 -25 -50
+em_dir <- file.path(main.dir, "models", paste0("opaka-em"))#, nyears_fwd)) #-5 -15 -25 -50
 
-scen <- "HRFpoorrec"
+scen <- "SQ"
 sas <- sas_full %>% filter(Scen_name == scen)
 #files.keep <- c("ss.par", "starter.ss", "forecast.ss", "em.ctl", "control.ss_new", "ss3.dat")
 
 #for(I in 1:niter){
-wrapper_fn <- function(I, main.dir = main.dir, nyears = nyears, nyears_fwd = nyears_fwd, scen = scen, sas = sas, full_recdevs = full_recdevs, om_dir = om_dir, em_dir = em_dir){   
+wrapper_fn <- function(I, main.dir = main.dir, nyears = nyears, nyears_fwd = nyears_fwd, scen = scen, sas = sas, F_comm_df = F_comm_df, F_noncomm_df = F_noncomm_df, full_recdevs = full_recdevs, om_dir = om_dir, em_dir = em_dir){   
     
     # Get F-vector 
     F_list <- list(
@@ -42,11 +43,12 @@ wrapper_fn <- function(I, main.dir = main.dir, nyears = nyears, nyears_fwd = nye
         fleets = c(1, 3), 
         years = list(seq(1, nyears, by = 1), seq(69, nyears, by = 1)),
         seas = list(7,1), 
-        sds_obs = list(0.13, sas[which(sas$N_years == nyears_fwd), "Resfish_index_CV"]) 
+        sds_obs = list(0.2, 0.10),
+        sds_out = list(0.13, sas[which(sas$N_years == nyears_fwd), "Resfish_index_CV"]) 
     )
 
     lcomp <- list(
-        fleets = c(3), Nsamp = list(c(rep(45, 7), rep(sas[which(sas$N_years == nyears_fwd), "Neff_len_Resfish"], nyears_fwd))),
+        fleets = c(3), Nsamp = list(c(rep(30, 7), rep(sas[which(sas$N_years == nyears_fwd), "Neff_len_Resfish"], nyears_fwd))),
         years = list(seq(69, nyears, by = 1))
     )
 
@@ -67,7 +69,7 @@ wrapper_fn <- function(I, main.dir = main.dir, nyears = nyears, nyears_fwd = nye
         om_dir = om_dir,
         em_dir = em_dir,
         user_recdevs = full_recdevs,
-        bias_adjust = T,
+        bias_adjust = F,
         seed = seed
     )
 
@@ -99,15 +101,13 @@ wrapper_fn <- function(I, main.dir = main.dir, nyears = nyears, nyears_fwd = nye
 }
 
 A = proc.time()
-sfInit(parallel = TRUE, cpus = 5)
+sfInit(parallel = TRUE, cpus = 10)
 sfLibrary(ss3sim)
 sfLibrary(r4ss)
 sfLibrary(stringr)
-sfExport("F_comm_df")
-sfExport("F_noncomm_df")
 sfExport("set.seed")
-sfLapply(1:niter, wrapper_fn, main.dir = main.dir, nyears = nyears, nyears_fwd = nyears_fwd, 
-    scen = scen, sas = sas, full_recdevs = full_poor_recdevs, om_dir = om_dir, em_dir = em_dir)
+sfLapply(11:niter, wrapper_fn, main.dir = main.dir, nyears = nyears, nyears_fwd = nyears_fwd, 
+    scen = scen, sas = sas, F_comm_df = F_comm_df, F_noncomm_df = F_noncomm_df, full_recdevs = full_recdevs, om_dir = om_dir, em_dir = em_dir)
 sfStop()
 B = proc.time()
 (B-A)/60
@@ -120,12 +120,12 @@ B = proc.time()
 all_scenario_names <- paste(sas_full$Scen_name, sas_full$N_years, "yrfwd", sep = "_")
 get_results_all(
     overwrite_files = T,
-    user_scenarios = all_scenario_names,
+    user_scenarios =  "SQ_0_yrfwd", #all_scenario_names,
     filename_prefix = "all_scens"
 )   
 get_fits_all(
     overwrite_files = T,
-    user_scenarios = all_scenario_names,
+    user_scenarios = "SQ_0_yrfwd", #all_scenario_names,
     filename_prefix = "all_scens"
 )
 
@@ -134,3 +134,24 @@ get_fits_all(
 # files.keep <- c("ss.par", "starter.ss", "forecast.ss", "em.ctl", "control.ss_new", "ss3.dat")
 # unlink(setdiff(list.files(em_path, full.names = T), file.path(em_path,files.keep)), recursive=TRUE)
 # unlink(setdiff(list.files(om_path, full.names = T), file.path(om_path,files.keep)), recursive=TRUE)
+
+devtools::install_github('Cole-Monnahan-NOAA/adnuts')
+library(adnuts)
+m<-"ss3"
+p<-file.path(main.dir, "SQ_0_yrfwd", "2", "em", "adnuts_model")
+#make sure to run model with -hbf before fitting
+fit_model <- adnuts::sample_nuts(model=m, path=p,  iter=1000, warmup=400, 
+          chains=3, cores=4,control=list(metric='mle', max_treedepth=5),mceval=TRUE)
+
+summary(fit_model)
+str(fit_model$monitor)
+summary(fit_model$monitor$n_eff)
+
+post <- extract_samples(fit_model)
+str(post)
+install.packages("shinystan")
+library(shinystan)
+launch_shinyadmb(fit_model)
+
+plot_marginals(fit_model)
+pairs_admb(fit_model)

@@ -7,11 +7,18 @@
 #track directories so can recurse into them
 !*/ 
 ## track SS input files filetypes
-!Model_Runs/*
-!opaka-sim/*
 !models/03-simplified-mod
-!models/opaka-em
-!models/opaka-om 
+!models/opaka-em/*
+!models/opaka-om/* 
+!models/opaka-om-5/*
+!models/opaka-em-5/*
+!models/opaka-om-15/*
+!models/opaka-em-15/*
+!models/opaka-om-25/*
+!models/opaka-em-25/*
+!models/opaka-om-50/*
+!models/opaka-em-50/*
+!bin/*
 !*/*data.ss
 !*/*data_boot*.ss
 !*/control.ss
@@ -24,6 +31,7 @@
 !*.R
 !Inputs/*
 !*.qmd
+*.sif
 # renv files
 !renv/settings.json
 !renv.lock

@@ -130,8 +130,8 @@ scalar_re <- calculate_re(results_scalar)
 ### depletion_re, F_MSY_re, SR_LN_R0_re, SSB_MSY_re, Totbio_Unfished_re
 
 scalar_re %>% 
-select(c(iteration, scenario, depletion_re, F_MSY_re, SR_LN_R0_re, SSB_MSY_re)) %>%
-pivot_longer(cols = c(depletion_re, F_MSY_re, SR_LN_R0_re, SSB_MSY_re)) %>% 
+select(c(iteration, scenario, depletion_re, SR_LN_R0_re, SSB_MSY_re)) %>%
+pivot_longer(cols = c(depletion_re, SR_LN_R0_re, SSB_MSY_re)) %>% 
 ggplot() +
 geom_boxplot(aes(x = name, y = value, fill = scenario)) + 
 geom_hline(yintercept = 0, color = "grey50", linetype = 2) +
