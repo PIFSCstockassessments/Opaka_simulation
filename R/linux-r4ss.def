@@ -42,17 +42,16 @@ From: ubuntu:20.04
     ln -s /opt/R/${R_VERSION}/bin/Rscript /usr/local/bin/Rscript
 
     R -e "install.packages('remotes', dependencies=TRUE, repos='http://cran.rstudio.com/')"
-    R -e "install.packages('data.table', dependencies=TRUE, repos='http://cran.rstudio.com/')"
+    R -e "install.packages('dplyr', dependencies=TRUE, repos='http://cran.rstudio.com/')"
     R -e "install.packages('magrittr', dependencies=TRUE, repos='http://cran.rstudio.com/')"
-    R -e "install.packages('mvtnorm', dependencies=TRUE, repos='http://cran.rstudio.com/')"
-    R -e "remotes::install_github('r4ss/r4ss')"
+    R -e "remotes::install_github('r4ss/r4ss@v1.46.1')"
     R -e "remotes::install_github('ss3sim/ss3sim')"
 
     NOW=`date`
     echo 'export build_date=$NOW' >> $SINGULARITY_ENVIRONMENT
 
     mkdir -p /ss_exe
-    curl -L -o /ss_exe/ss_linux https://github.com/nmfs-stock-synthesis/stock-synthesis/releases/download/v3.30.20/ss_linux
+    curl -L -o /ss_exe/ss_linux https://github.com/nmfs-ost/ss3-source-code/releases/download/v3.30.19.01/ss_linux
     chmod 755 /ss_exe/ss_linux
 
 %environment
@@ -63,4 +62,4 @@ From: ubuntu:20.04
     Version v0.0.4
 
 %help
-    This is a Linux (Ubuntu 20.04) container containing Stock Synthesis (version 3.30.20), R (version 4.4.0) and the R packages r4ss, ss3diags, ss3sim, data.table, magrittr, and mvtnorm.
+    This is a Linux (Ubuntu 20.04) container containing Stock Synthesis (version 3.30.19.01), R (version 4.4.0) and the R packages r4ss (version 1.46.1 for compatibility with ss3sim), ss3sim, dplyr, and magrittr.

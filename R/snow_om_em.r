@@ -17,13 +17,13 @@ load(file.path(main.dir, "Inputs", "increaseF_mat.RData"))
 load(file.path(main.dir, "Inputs", "recdevs_mat.RData"))
 load(file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"))
 source(file.path(main.dir, "R", "get_fits.r"))
-niter <- 15
+niter <- 10
 #u_vec vector of ratios for calculating non-commercial catch
 #u_vec <- c(rep(1.8, 26), rep(1.47, 29), rep(1.03, 70))
-nyears <- 75
-nyears_fwd <- 0
-om_dir <- file.path(main.dir, "models", paste0("opaka-om"))#, nyears_fwd)) #-5 -15 -25 -50
-em_dir <- file.path(main.dir, "models", paste0("opaka-em"))#, nyears_fwd)) #-5 -15 -25 -50
+nyears <- 90
+nyears_fwd <- 15
+om_dir <- file.path(main.dir, "models", paste0("opaka-om-", nyears_fwd)) #-5 -15 -25 -50
+em_dir <- file.path(main.dir, "models", paste0("opaka-em-", nyears_fwd)) #-5 -15 -25 -50
 
 scen <- "SQ"
 sas <- sas_full %>% filter(Scen_name == scen)
@@ -52,10 +52,10 @@ wrapper_fn <- function(I, main.dir = main.dir, nyears = nyears, nyears_fwd = nye
         years = list(seq(69, nyears, by = 1))
     )
 
-    agecomp <- list(
-        fleets = c(3), Nsamp = list(sas[which(sas$N_years == nyears_fwd), "Neff_age_Resfish"]),
-        years = list(seq(69, 70, by = 1))
-    )
+    # agecomp <- list(
+    #     fleets = c(3), Nsamp = list(sas[which(sas$N_years == nyears_fwd), "Neff_age_Resfish"]),
+    #     years = list(seq(69, 70, by = 1))
+    # )
     
     seed <- set.seed[I,2]
 
@@ -65,11 +65,10 @@ wrapper_fn <- function(I, main.dir = main.dir, nyears = nyears, nyears_fwd = nye
         f_params = F_list,
         index_params = index,
         lcomp_params = lcomp,
-        #agecomp_params = agecomp,
         om_dir = om_dir,
         em_dir = em_dir,
         user_recdevs = full_recdevs,
-        bias_adjust = F,
+        bias_adjust = T,
         seed = seed
     )
 
@@ -83,7 +82,7 @@ wrapper_fn <- function(I, main.dir = main.dir, nyears = nyears, nyears_fwd = nye
     #for hyperstable scenario, copy data from normal rec models and use it for EM
     if(str_detect(scen, "hyperstable")){
 
-        scen_prefix <- str_split(scen, "hyperstable")[[1]][1]
+        scen_prefix <- strsplit(scen, "hyperstable")[[1]][1]
         regular_em <- SS_readdat_3.30(file.path(main.dir, paste(scen_prefix, nyears_fwd, "yrfwd", sep = "_"), I, "em", "ss3.dat"))
         em_path <- file.path(main.dir, paste(scen, nyears_fwd, "yrfwd", sep = "_"), I, "em")
         #replace catch and CPUE for commercial fishery
@@ -106,7 +105,7 @@ sfLibrary(ss3sim)
 sfLibrary(r4ss)
 sfLibrary(stringr)
 sfExport("set.seed")
-sfLapply(11:niter, wrapper_fn, main.dir = main.dir, nyears = nyears, nyears_fwd = nyears_fwd, 
+sfLapply(1:niter, wrapper_fn, main.dir = main.dir, nyears = nyears, nyears_fwd = nyears_fwd, 
     scen = scen, sas = sas, F_comm_df = F_comm_df, F_noncomm_df = F_noncomm_df, full_recdevs = full_recdevs, om_dir = om_dir, em_dir = em_dir)
 sfStop()
 B = proc.time()
@@ -120,12 +119,12 @@ B = proc.time()
 all_scenario_names <- paste(sas_full$Scen_name, sas_full$N_years, "yrfwd", sep = "_")
 get_results_all(
     overwrite_files = T,
-    user_scenarios =  "SQ_0_yrfwd", #all_scenario_names,
+    user_scenarios =  c("SQ_15_yrfwd", "SQpoorrec_15_yrfwd"), #all_scenario_names,
     filename_prefix = "all_scens"
 )   
 get_fits_all(
     overwrite_files = T,
-    user_scenarios = "SQ_0_yrfwd", #all_scenario_names,
+    user_scenarios = c("SQ_15_yrfwd", "SQpoorrec_15_yrfwd"), #all_scenario_names,
     filename_prefix = "all_scens"
 )
 
