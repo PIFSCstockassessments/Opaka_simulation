@@ -17,15 +17,15 @@ load(file.path(main.dir, "Inputs", "increaseF_mat.RData"))
 load(file.path(main.dir, "Inputs", "recdevs_mat.RData"))
 load(file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"))
 source(file.path(main.dir, "R", "get_fits.r"))
-niter <- 10
+niter <- 1
 #u_vec vector of ratios for calculating non-commercial catch
 #u_vec <- c(rep(1.8, 26), rep(1.47, 29), rep(1.03, 70))
-nyears <- 90
-nyears_fwd <- 15
-om_dir <- file.path(main.dir, "models", paste0("opaka-om-", nyears_fwd)) #-5 -15 -25 -50
-em_dir <- file.path(main.dir, "models", paste0("opaka-em-", nyears_fwd)) #-5 -15 -25 -50
+nyears <- 100
+nyears_fwd <- 25
+om_dir <- file.path(main.dir, "models", paste0("opaka-om-", nyears_fwd, "-FRS-only")) #-5 -15 -25 -50
+em_dir <- file.path(main.dir, "models", paste0("opaka-em-", nyears_fwd, "-FRS-only")) #-5 -15 -25 -50
 
-scen <- "SQ"
+scen <- "FRS_only"
 sas <- sas_full %>% filter(Scen_name == scen)
 #files.keep <- c("ss.par", "starter.ss", "forecast.ss", "em.ctl", "control.ss_new", "ss3.dat")
 
@@ -40,22 +40,22 @@ wrapper_fn <- function(I, main.dir = main.dir, nyears = nyears, nyears_fwd = nye
     )
     #create sampling scheme for indices of abundance
     index <- list(
-        fleets = c(1, 3), 
-        years = list(seq(1, nyears, by = 1), seq(69, nyears, by = 1)),
-        seas = list(7,1), 
-        sds_obs = list(0.2, 0.10),
-        sds_out = list(0.13, sas[which(sas$N_years == nyears_fwd), "Resfish_index_CV"]) 
+        fleets = c(1), 
+        years = list(seq(1, nyears, by = 1)),
+        seas = list(7), 
+        sds_obs = list(0.2),
+        sds_out = list(0.13) 
     )
 
-    lcomp <- list(
-        fleets = c(3), Nsamp = list(c(rep(30, 7), rep(sas[which(sas$N_years == nyears_fwd), "Neff_len_Resfish"], nyears_fwd))),
-        years = list(seq(69, nyears, by = 1))
-    )
-
-    # agecomp <- list(
-    #     fleets = c(3), Nsamp = list(sas[which(sas$N_years == nyears_fwd), "Neff_age_Resfish"]),
-    #     years = list(seq(69, 70, by = 1))
+    # lcomp <- list(
+    #     fleets = c(3), Nsamp = list(c(rep(30, 7), rep(sas[which(sas$N_years == nyears_fwd), "Neff_len_Resfish"], nyears_fwd))),
+    #     years = list(seq(69, nyears, by = 1))
     # )
+
+    agecomp <- list(
+        fleets = c(1), Nsamp = list(10),
+        years = list(seq(69, 70, by = 1))
+    )
     
     seed <- set.seed[I,2]
 
@@ -64,11 +64,12 @@ wrapper_fn <- function(I, main.dir = main.dir, nyears = nyears, nyears_fwd = nye
         scenarios = paste(scen, nyears_fwd, "yrfwd", sep = "_"), 
         f_params = F_list,
         index_params = index,
-        lcomp_params = lcomp,
+        #lcomp_params = lcomp,
+        agecomp_params = agecomp,
         om_dir = om_dir,
         em_dir = em_dir,
         user_recdevs = full_recdevs,
-        bias_adjust = T,
+        bias_adjust = F,
         seed = seed
     )
 
@@ -106,25 +107,36 @@ sfLibrary(r4ss)
 sfLibrary(stringr)
 sfExport("set.seed")
 sfLapply(1:niter, wrapper_fn, main.dir = main.dir, nyears = nyears, nyears_fwd = nyears_fwd, 
-    scen = scen, sas = sas, F_comm_df = F_comm_df, F_noncomm_df = F_noncomm_df, full_recdevs = full_recdevs, om_dir = om_dir, em_dir = em_dir)
+    scen = scen, sas = sas, F_comm_df = F_comm_df, F_noncomm_df = F_noncomm_df, full_recdevs = full_poor_recdevs, om_dir = om_dir, em_dir = em_dir)
 sfStop()
 B = proc.time()
 (B-A)/60
 
 
+HRF_dir <- file.path(main.dir, "HRF_25_yrfwd")
+SQ_dir <- file.path(main.dir, "SQ_25_yrfwd")
 
+for(i in 1:niter){
+
+    HRF_dir_i <- file.path(HRF_dir, i)
+    SQ_dir_i <- file.path(SQ_dir, i)
+    
+
+
+
+}
 
 
 #get results out of models for comparisons
 all_scenario_names <- paste(sas_full$Scen_name, sas_full$N_years, "yrfwd", sep = "_")
 get_results_all(
     overwrite_files = T,
-    user_scenarios =  c("SQ_15_yrfwd", "SQpoorrec_15_yrfwd"), #all_scenario_names,
+    user_scenarios =  c("SQ_25_yrfwd", "HRF_25_yrfwd"),
     filename_prefix = "all_scens"
 )   
 get_fits_all(
     overwrite_files = T,
-    user_scenarios = c("SQ_15_yrfwd", "SQpoorrec_15_yrfwd"), #all_scenario_names,
+    user_scenarios = c("SQ_25_yrfwd", "HRF_25_yrfwd"), #all_scenario_names,
     filename_prefix = "all_scens"
 )
 

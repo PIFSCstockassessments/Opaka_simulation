@@ -113,6 +113,20 @@ facet_wrap(~scenario, scales = "free_x") +
 ylim(-.5, .5) +
 theme_classic()
 
+## runstest 
+runs_list <- index_df |> filter(model_run == "em") |> mutate(resid = log(Obs) - log(Exp)) |> group_by(scenario, iteration, Fleet) |> group_map(~randtests::runs.test(.x$resid, alternative = "left.sided"))
+
+index_df %>% 
+select(scenario, iteration, Fleet) %>% 
+distinct() %>% 
+mutate(runs_pvalue = runs_list %>% map(~ pluck(., "p.value")) %>% unlist()) %>% 
+ggplot() +
+geom_point(aes(x = as.factor(scenario), y = runs_pvalue), color = "steelblue", alpha = 0.5, size = 4) +
+facet_wrap(~Fleet) +
+geom_hline(yintercept = 0.05, color = "grey50", linetype = 2) + 
+theme_classic() 
+
+
 ```
 
 ###
