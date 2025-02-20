@@ -3,7 +3,7 @@ library(r4ss) #needs to be v1.46.1 to work with ss3sim
 library(magrittr)
 library(dplyr)
 library(ss3sim) #be sure to use ss3.exe v3.30.19
-library(ss3diags)
+library(stringr)
 print(getwd())
 
 #get args from Bash environment (for OSG)
@@ -18,9 +18,9 @@ load("constantF_mat.RData")
 load("recdevs_mat.RData")
 
 #Variables
-nyears <- 90
-nyears_fwd <- 15
-scen <- "SQ"
+nyears <- 100
+nyears_fwd <- 25
+scen <- "IRF_SQ"
 
 #Template OM and EM files
 om_dir <- paste0("opaka-om-", nyears_fwd, "/")
@@ -28,7 +28,7 @@ em_dir <- paste0("opaka-em-", nyears_fwd, "/")
 
 #Get iteration number
 I <- as.numeric(tail(strsplit(args[1], "/")[[1]], n = 1))
-
+print(I)
 sas <- sas_full %>% filter(Scen_name == scen)
 
 # Get F-vector 
@@ -82,4 +82,17 @@ ss3sim_base(
         rm(list = c("om_dat", "em_dat"))
 
     }
-    
+
+#list.dirs(getwd())    
+#print(paste("The current directory is ", getwd()))
+
+# extract model output
+#ss_report_om <- SS_output(dir=file.path(getwd(), paste(scen, nyears_fwd, "yrfwd", sep = "_"), I, "om"))
+#ss_report_em <- SS_output(dir=file.path(getwd(), paste(scen, nyears_fwd, "yrfwd", sep = "_"), I, "em"))
+# make sure report files were read successfully
+#exists("ss_report_om")
+#exists("ss_report_em")
+
+# save output
+#save(list = "ss_report_om",file="ss_report_om.RData")
+#save(list = "ss_report_em", file = "ss_report_em.RData")
