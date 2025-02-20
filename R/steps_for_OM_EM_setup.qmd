@@ -14,7 +14,7 @@ source(file.path(main.dir, "R", "simF.r"))
 source(file.path(main.dir, "R", "make_dummy_dat.r"))
 source(file.path(main.dir, "R", "get_fits.r"))
 set.seed <- read.csv(file.path(main.dir, "Inputs", "setseed.csv"))
-niter <- 10
+niter <- 100
 rep <- SS_output(dir = file.path(main.dir, "models", "03-simplified-mod"))
 ```
 
@@ -170,48 +170,76 @@ load(file.path(main.dir, "Inputs", "constantF_mat.RData"))
 load(file.path(main.dir, "Inputs", "increaseF_mat.RData"))
 ```
 
-
-### Creating scenario variables
-```{r}
-#steepness
-h_vec <- c(0.5, 0.76, 0.85)
-#unreported catch ratios 
-u_vec <- c(rep(1.8, 26), rep(1.47, 29), rep(1.03, 20))
-##TODO: sampling vectors for catch, index, length and age comp data 
-```
-
 ### Create the directories for OSG and target_dir.txt
 
 ```{r}
 
 library(fs)
 
-scen <- "SQ"
-nyears_fwd <- 15
-niter <- 10
+scen <- "FRS_only_poorrec"
+nyears_fwd <- 25
+niter <- 100
 scen_dirs <- file.path(main.dir, paste(scen, nyears_fwd, "yrfwd", sep = "_"), 1:niter)
 sapply(scen_dirs, dir.create, recursive = T)
-file.copy(from = file.path(main.dir, "Inputs", "recdevs_mat.RData"), file.path(scen_dirs, "recdevs_mat.RData"))
+file.copy(from = file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"), file.path(scen_dirs, "poor_recdevs_mat.RData"))
+#file.copy(from = file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"), file.path(scen_dirs, "poor_recdevs_mat.RData"))
 file.copy(from = file.path(main.dir, "Inputs", "setseed.csv"), file.path(scen_dirs, "setseed.csv"))
 file.copy(from = file.path(main.dir, "Inputs", "sas.csv"), file.path(scen_dirs, "sas.csv"))
 file.copy(from = file.path(main.dir, "Inputs", "constantF_mat.RData"), file.path(scen_dirs, "constantF_mat.RData"))
 
 for(i in 1:length(scen_dirs)){
-    dir_copy(file.path(main.dir, "models", paste0("opaka-om-", nyears_fwd)), scen_dirs[i])
-    dir_copy(file.path(main.dir, "models", paste0("opaka-em-", nyears_fwd)), scen_dirs[i])
+    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-om-", nyears_fwd)), scen_dirs[i]) #"-FRS-only"
+    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-em-", nyears_fwd)), scen_dirs[i])
+}
+#only for FRS_only_poorrec_25_yrfwd scenario (testing hyperstablity)
+for(i in 1:length(scen_dirs)){
+    file.copy(from = file.path(main.dir, "FRS_only_25_yrfwd", i, "em", "ss3.dat"), 
+    to = file.path(scen_dirs[i], "normal_rec.dat"))
 }
 
 for(i in 1:length(scen_dirs)){
     shell(paste0("powershell cd ", scen_dirs[i], ";tar -czf start.tar.gz ./*"))
-    files_clean <- list.files(scen_dirs[i], pattern = ".csv|.RData|opaka-", full.names = T)
+    files_clean <- list.files(scen_dirs[i], pattern = ".csv|.RData|opaka-|.dat", full.names = T)
     unlink(files_clean, recursive = T)
 }
 
-target_dirs <- list.dirs(file.path(main.dir, paste(scen, nyears_fwd, "yrfwd", sep = "_")), recursive = F)
+target_dirs <- paste0(paste(scen, nyears_fwd, "yrfwd", sep = "_"), "/", 1:niter)
 writeLines(target_dirs, file.path(main.dir, paste(scen, nyears_fwd, "yrfwd", sep = "_"), "target_dirs.txt"))
-shell(paste0("powershell cd ", main.dir, ";tar -czf upload.SQ_15_yrsfwd.tar.gz SQ_15_yrfwd/"))
+shell(paste0("powershell cd ", main.dir, ";tar -czf upload.", scen, "_25_yrsfwd.tar.gz ", scen, "_25_yrfwd/"))
 #upload these files to OSG 
 ```
+
+### Getting results  
+
+```{r}
+#get results out of models for comparisons
+all_scenario_names <- paste(sas_full$Scen_name, sas_full$N_years, "yrfwd", sep = "_")
+
+for(i in 1:length(all_scenario_names)){
+    if(file.exists(file.path(main.dir, paste0("download.", sas_full$Scen_name[i], "_25_yrfwd.tar.gz ")))){
+            shell(paste0("powershell cd ", main.dir, ";tar -xzf download.", sas_full$Scen_name[i], "_25_yrfwd.tar.gz ", sas_full$Scen_name[i], "_25_yrfwd/"))
+            for(y in 1:niter){
+                shell(paste0("powershell cd ", main.dir, "/", sas_full$Scen_name[i], "_25_yrfwd/", y, ";tar -xzf End.tar.gz"))
+            }
+    }else{
+        next
+    }
+
+}
+
+get_results_all(
+    overwrite_files = T,
+    user_scenarios =  c("FRS_only_25_yrfwd", "HRF_SQ_25_yrfwd", "IRF_SQ_25_yrfwd", "LRF_SQ_25_yrfwd"),
+    filename_prefix = "all_scens"
+)   
+get_fits_all(
+    overwrite_files = T,
+    user_scenarios = c("FRS_only_25_yrfwd", "HRF_SQ_25_yrfwd", "IRF_SQ_25_yrfwd", "LRF_SQ_25_yrfwd"), #all_scenario_names,
+    filename_prefix = "all_scens"
+)
+
+```
+
 
 
 ### Create starting OM and EMs for a scenario
@@ -299,56 +327,24 @@ plot(x = 1:90, y = cpue, type = "l")
 lines(x = 1:90, y = hscpue, col = "orange")
 
 reps <- SSgetoutput(dirvec = c(#file.path(main.dir, "SQ_15_yrfwd", "1", "om"),
-file.path(main.dir, "no_var_0_yrfwd", "1", "om"),
-file.path(main.dir, "no_var_0_yrfwd", "1", "em")
+file.path(main.dir, "FRS_only_poorrec_25_yrfwd", "1", "om"),
+file.path(main.dir, "FRS_only_poorrec_25_yrfwd", "1", "em")
 ))
 
 rep_1 <- SS_output(dir = dir, covar = FALSE, verbose = FALSE,
     forecast = forecastTF, warn = FALSE,
     readwt = FALSE, printstats = FALSE, NoCompOK = TRUE)
 reps <- SSgetoutput(dirvec = c(
-#  file.path(main.dir, "HRFhyperstable_15_yrfwd", "1", "om"),
-#  file.path(main.dir, "HRFhyperstable_15_yrfwd", "1", "em"),
-#  file.path(main.dir, "HRFhyperstable_15_yrfwd", "2", "om"),
-#  file.path(main.dir, "HRFhyperstable_15_yrfwd", "2", "em"),
-#  file.path(main.dir, "HRFhyperstable_15_yrfwd", "3", "om"),
-#  file.path(main.dir, "HRFhyperstable_15_yrfwd", "3", "em"),
-#  file.path(main.dir, "HRFhyperstable_15_yrfwd", "4", "om"),
-#  file.path(main.dir, "HRFhyperstable_15_yrfwd", "4", "em"),
-#  file.path(main.dir, "HRFhyperstable_15_yrfwd", "5", "om"),
-#  file.path(main.dir, "HRFhyperstable_15_yrfwd", "5", "em")
-file.path(main.dir, "SQpoorrec_15_yrfwd", "1", "om"),
-file.path(main.dir, "SQpoorrec_15_yrfwd", "1", "em"),
-file.path(main.dir, "SQpoorrec_15_yrfwd", "2", "om"),
-file.path(main.dir, "SQpoorrec_15_yrfwd", "2", "em"),
-file.path(main.dir, "SQpoorrec_15_yrfwd", "3", "om"),
-file.path(main.dir, "SQpoorrec_15_yrfwd", "3", "em"),
-file.path(main.dir, "SQpoorrec_15_yrfwd", "4", "om"),
-file.path(main.dir, "SQpoorrec_15_yrfwd", "4", "em"),
-file.path(main.dir, "SQpoorrec_15_yrfwd", "5", "om"),
-file.path(main.dir, "SQpoorrec_15_yrfwd", "5", "em"),
-file.path(main.dir, "SQpoorrec_15_yrfwd", "6", "om"),
-file.path(main.dir, "SQpoorrec_15_yrfwd", "6", "em"),
-file.path(main.dir, "SQpoorrec_15_yrfwd", "7", "om"),
-file.path(main.dir, "SQpoorrec_15_yrfwd", "7", "em"),
-file.path(main.dir, "SQpoorrec_15_yrfwd", "8", "om"),
-file.path(main.dir, "SQpoorrec_15_yrfwd", "8", "em"),
-file.path(main.dir, "SQpoorrec_15_yrfwd", "9", "om"),
-file.path(main.dir, "SQpoorrec_15_yrfwd", "9", "em"),
-file.path(main.dir, "SQpoorrec_15_yrfwd", "10", "om"),
-file.path(main.dir, "SQpoorrec_15_yrfwd", "10", "em")
-#  file.path(main.dir, "SQ_0_yrfwd", "1", "om"),
-#  file.path(main.dir, "SQ_0_yrfwd", "1", "em"),
-#  file.path(main.dir, "SQ_0_yrfwd", "11", "om"),
-#  file.path(main.dir, "SQ_0_yrfwd", "11", "em"),
-#  file.path(main.dir, "SQ_0_yrfwd", "12", "om"),
-#  file.path(main.dir, "SQ_0_yrfwd", "12", "em"),
-#  file.path(main.dir, "SQ_0_yrfwd", "13", "om"),
-#  file.path(main.dir, "SQ_0_yrfwd", "13", "em"),
-#  file.path(main.dir, "SQ_0_yrfwd", "14", "om"),
-#  file.path(main.dir, "SQ_0_yrfwd", "14", "em"),
-#  file.path(main.dir, "SQ_0_yrfwd", "15", "om"),
-#  file.path(main.dir, "SQ_0_yrfwd", "15", "em")
+file.path(main.dir, "LRF_SQ_25_yrfwd", "1", "om"),
+file.path(main.dir, "LRF_SQ_25_yrfwd", "1", "em"),
+file.path(main.dir, "LRF_poorrec_25_yrfwd", "1", "om"),
+file.path(main.dir, "LRF_poorrec_25_yrfwd", "1", "em"),
+file.path(main.dir, "IRF_poorrec_25_yrfwd", "1", "om"),
+file.path(main.dir, "IRF_poorrec_25_yrfwd", "1", "em"),
+file.path(main.dir, "HRF_poorrec_25_yrfwd", "1", "om"),
+file.path(main.dir, "HRF_poorrec_25_yrfwd", "1", "em"),
+file.path(main.dir, "FRS_only_poorrec_25_yrfwd", "1", "om"),
+file.path(main.dir, "FRS_only_poorrec_25_yrfwd", "1", "em")
 ))
 
 mod_dirs <- list.dirs(path = file.path(main.dir, "SQ_0_yrfwd"), full.names = T, recursive = T)
