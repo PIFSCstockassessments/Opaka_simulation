@@ -176,26 +176,26 @@ load(file.path(main.dir, "Inputs", "increaseF_mat.RData"))
 
 library(fs)
 
-scen <- "FRS_only_poorrec"
+scen <- "IRF_Selex_poorrec"
 nyears_fwd <- 25
 niter <- 100
 scen_dirs <- file.path(main.dir, paste(scen, nyears_fwd, "yrfwd", sep = "_"), 1:niter)
 sapply(scen_dirs, dir.create, recursive = T)
+file.copy(from = file.path(main.dir, "Inputs", "recdevs_mat.RData"), file.path(scen_dirs, "recdevs_mat.RData"))
 file.copy(from = file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"), file.path(scen_dirs, "poor_recdevs_mat.RData"))
-#file.copy(from = file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"), file.path(scen_dirs, "poor_recdevs_mat.RData"))
 file.copy(from = file.path(main.dir, "Inputs", "setseed.csv"), file.path(scen_dirs, "setseed.csv"))
 file.copy(from = file.path(main.dir, "Inputs", "sas.csv"), file.path(scen_dirs, "sas.csv"))
 file.copy(from = file.path(main.dir, "Inputs", "constantF_mat.RData"), file.path(scen_dirs, "constantF_mat.RData"))
 
 for(i in 1:length(scen_dirs)){
-    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-om-", nyears_fwd)), scen_dirs[i]) #"-FRS-only"
-    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-em-", nyears_fwd)), scen_dirs[i])
+    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-om-", nyears_fwd, "-selex")), scen_dirs[i]) #"-FRS-only" #, "-selex"
+    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-em-", nyears_fwd, "-selex")), scen_dirs[i])
 }
 #only for FRS_only_poorrec_25_yrfwd scenario (testing hyperstablity)
-for(i in 1:length(scen_dirs)){
-    file.copy(from = file.path(main.dir, "FRS_only_25_yrfwd", i, "em", "ss3.dat"), 
-    to = file.path(scen_dirs[i], "normal_rec.dat"))
-}
+# for(i in 1:length(scen_dirs)){
+#     file.copy(from = file.path(main.dir, "FRS_only_25_yrfwd", i, "em", "ss3.dat"), 
+#     to = file.path(scen_dirs[i], "normal_rec.dat"))
+# }
 
 for(i in 1:length(scen_dirs)){
     shell(paste0("powershell cd ", scen_dirs[i], ";tar -czf start.tar.gz ./*"))
@@ -242,93 +242,15 @@ get_fits_all(
 
 
 
-### Create starting OM and EMs for a scenario
-
-This loop can be run for each scenario to create the starting OM and EMs. To distinguish between sampling scenarios, change the `scenarios` argument in `ss3sim_base()`. 
+### Checking results
 
 ```{r}
 
-#recdev0 <- matrix(data = 0, nrow = 75, ncol = niter) #for testing deterministic runs with no rec-devs
-nyears <- 75
-nyears_fwd <- 0
-om_dir <- file.path(main.dir, "models", paste0("opaka-om"))#, nyears_fwd)) #-5 -15 -25 -50
-em_dir <- file.path(main.dir, "models", paste0("opaka-em"))#, nyears_fwd)) #-5 -15 -25 -50
-
-scen <- "no_var"
-sas <- sas_full %>% filter(Scen_name == scen)
-
-for(I in 11:niter){
-    # Get F-vector 
-   # F_noncomm <- u_vec * F_vec_mat[I,]
-    F_list <- list(
-        years = list(1:nyears, 1:nyears),
-        fleets = c(1, 2), 
-        fvals = list(F_comm_df[1:nyears,I], F_noncomm_df[1:nyears,I])
-        )
-    #create sampling scheme for indices of abundance
-    index <- list(
-        fleets = c(1, 3), 
-        years = list(seq(1, nyears, by = 1), seq(69, nyears, by = 1)),
-        seas = list(7,1), 
-        sds_obs = list(0.01, sas[which(sas$N_years == nyears_fwd), "Resfish_index_CV"]) 
-    )
-
-    lcomp <- list(
-        fleets = c(3), Nsamp = list(100),
-        years = list(seq(69, nyears, by = 1))
-    )
-
-    agecomp <- list(
-        fleets = c(3), Nsamp = list(sas[which(sas$N_years == nyears_fwd), "Neff_age_Resfish"]),
-        years = list(seq(69, nyears, by = 1))
-    )
-    
-    seed <- set.seed[I,2]
-
-    ss3sim_base(
-        iterations = I,
-        scenarios = paste(scen, nyears_fwd, "yrfwd", sep = "_"), 
-        f_params = F_list,
-        index_params = index,
-        lcomp_params = lcomp,
-        #agecomp_params = agecomp,
-        om_dir = om_dir,
-        em_dir = em_dir,
-        user_recdevs = full_recdevs,
-        bias_adjust = T,
-        seed = seed,
-        extra = "-nohess"
-    )
-
-    om_dat <- SS_readdat_3.30(file = file.path(main.dir, "Model_Runs", I, "om", "ss3.dat"))
-    om_dat$Nsexes <- -1
-    SS_writedat(om_dat, file.path(main.dir, "Model_Runs", I, "om", "ss3.dat"), overwrite = T)
-    r4ss::run(dir = file.path(main.dir, "Model_Runs", I, "om"), exe = "ss", extras = "-nohess", skipfinished = F)
-
-    em_dat <- SS_readdat_3.30(file = file.path(main.dir, "Model_Runs", I, "em", "ss3.dat"))
-    em_dat$Nsexes <- -1
-    SS_writedat(em_dat, file.path(main.dir, "Model_Runs", I, "em", "ss3.dat"), overwrite = T)
-    r4ss::run(dir = file.path(main.dir, "Model_Runs", I, "em"), exe = "ss", skipfinished = F)
-    rm(list = c("om_dat", "em_dat"))
-    
-
-}
-
-
 rep <- SS_output(file.path(main.dir, "SQ_0_yrfwd", "1", "em"))
 SS_plots(rep)
-dat <- SS_readdat_3.30(file.path(main.dir, "SQhyperstable_15_yrfwd", "1", "om", "data_expval.ss"))
-cpue <- dat$CPUE %>% filter(index == 1) %>% pull(obs)
-beta.1 <- .25
-means <- dat$CPUE %>% filter(index ==1 & year > 75) %>% summarise(mvb = mean(obs), mvbb = mean(obs^beta.1))
-
-hscpue <- c(cpue[1:75],(cpue[76:90]^beta.1)*(means$mvb[1]/means$mvbb[1]))
-plot(x = 1:90, y = cpue, type = "l")
-lines(x = 1:90, y = hscpue, col = "orange")
-
 reps <- SSgetoutput(dirvec = c(#file.path(main.dir, "SQ_15_yrfwd", "1", "om"),
-file.path(main.dir, "FRS_only_poorrec_25_yrfwd", "1", "om"),
-file.path(main.dir, "FRS_only_poorrec_25_yrfwd", "1", "em")
+file.path(main.dir, "IRF_Selex_25_yrfwd", "1", "om"),
+file.path(main.dir, "IRF_Selex_25_yrfwd", "1", "em")
 ))
 
 rep_1 <- SS_output(dir = dir, covar = FALSE, verbose = FALSE,
@@ -352,7 +274,7 @@ om_em_dirs <- mod_dirs[str_detect(mod_dirs, "om|em")]
 om_em_dirs <- om_em_dirs[str_detect(om_em_dirs, "bias_00", negate = T)]
 reps <- SSgetoutput(dirvec = om_em_dirs[c(1,2,25,26,47,48,69,70,91,92, 113, 114, 135, 136,157,158,179,180,3,4)])
 reps_sum <- SSsummarize(reps)
-SSplotComparisons(reps_sum, legendlabels = c("om1", "em1", "om2", "em2", "om3", "em3", "om4", "em4", "om5", "em5"))
+SSplotComparisons(reps_sum)
 SSplotComparisons(reps_sum, legendlabels = c("reg_om", "reg_em", "poorrec_om", "hyperstable_em"), print = T, plotdir = main.dir)
 
 SSplotComparisons(reps_sum, models = c(6:10), col = c(1,1,2,2,3,3,4,4,5,5), lty = rep(c(1,2), 5))
@@ -389,19 +311,12 @@ legend.text = element_text(size = 12))
 
 ```
 
-## Adding future data to model 
-I will add years of future data to the model based on simulated F's. I can simulate different possible F scenarios for the future, e.g. what if F increases over the next 50 years? what if F is constant over the next 50 years? Those F's will be added on to the F vector used right now and the same ss3sim_base function can be used to create a new EM. 
-Notes for self: 
-*   composition sample size - think in terms of stage-1 and stage-2. Stage-1 is input sample size and can be by number of hauls (or PSUs) or landing (Nfish sampled from fishery) (Punt et al 2021)
-*   Should age-comp data actually be CAAL? Probably. Good question to talk to Felipe and Eva about
-*   Fishery comp data _should_ be collected proportionally to catch, spatially and temporally. If the model isn't spatial, length comp data should be catch-weighted to obtain most representative data of the whole fishery
-
 
 Questions from Punt et al. 2021 to think about for this project:
 1. How does the ability to estimate quantities of management interest change with average annual (effective) sample sizes for length-comp and conditional age-length data? 
-~~2. Does including data sources with small sample sizes in an assessment lead to bias? ~~
+2. Does including data sources with small sample sizes in an assessment lead to bias? 
 3. What are the implications of collecting length and age samples at intervals greater than one year but large sample sizes?
-~~4. How does the assessment performance change if sampling is unbalanced over time and space?~~
+4. How does the assessment performance change if sampling is unbalanced over time and space?
 Questions from Ono et al. 2015
 1. What is the value of age vs length composition data? 
 2. What is the influence of age composition collection frequency and duration?
@@ -410,131 +325,6 @@ Questions from Ono et al. 2015
 5. What is the impact of composition data sample size? 
 6. Which fishing pattern produces the most informative data? 
 
-
-```{r}
-n_yrs_fwd <- 5
-Iteration <- 1 #iteration
-for(Iteration in 6:niter){
-
-## Create new OM directory
-om_I <- paste0("om_", n_yrs_fwd) 
-new_OM_dir <- file.path(main.dir, "opaka-sim", Iteration, om_I) #TODO: will need to generalize om_2 somehow
-dir.create(new_OM_dir)
-files_list <- c("ss3.dat", "om.ctl", "forecast.ss", "starter.ss", "ss.exe")
-file.copy(from = file.path(main.dir, "opaka-sim", Iteration, "om", files_list), 
-to = new_OM_dir, overwrite = T)
-##read in OM 
-om_dat <- SS_readdat_3.30(file = file.path(new_OM_dir, "ss3.dat"))
-endyr <- om_dat$endyr
-new_endyr <- endyr+n_yrs_fwd
-
-##update recdevs
-om_ctl <- SS_readctl_3.30(file = file.path(new_OM_dir, "om.ctl"), datlist = om_dat)
-
-om_ctl$MainRdevYrLast <- new_endyr
-om_ctl$last_yr_fullbias_adj <- new_endyr
-om_ctl$first_recent_yr_nobias_adj <- new_endyr
-om_ctl$N_Read_recdevs <- new_endyr
-om_ctl$recdev_input <- bind_rows(om_ctl$recdev_input, 
-data.frame(Year = seq(endyr+1, new_endyr), 
-recdev = rdevs_array[(endyr+1):new_endyr,Iteration]))
-
-## dataframe of new F to add to OM 
-new_f <- om_ctl$F_setup2 %>% 
-slice(rep(n(), each = n_yrs_fwd), .by = fleet) %>% 
-mutate(yr = rep(seq(endyr+1,new_endyr), 2)) %>%
-bind_rows(om_ctl$F_setup2) %>% 
-arrange(fleet, yr)
-F_comm <- new_f %>% filter(fleet == 1) %>% pull(Fvalue)
-F_non_comm <- new_f %>% filter(fleet == 2) %>% pull(Fvalue)
-newctl <- ss3sim::change_f(years = list(1:new_endyr,1:new_endyr), fleets = c(1,2), fvals = list(F_comm, F_non_comm), ctl_list = om_ctl)
-
-#save new ctl file
-SS_writectl(newctl, file.path(new_OM_dir, "om.ctl"), overwrite = T)
-
-##add dummy data rows to data file
-om_dat$endyr <- new_endyr
-## catch
-om_dat$catch <- make_dummy_dat_catch(fleets = c(1,2), years = 1:new_endyr)
-## cpue
-om_dat$CPUE <- bind_rows(
-    make_dummy_dat_cpue(fleets = 1, years = 1:new_endyr, seas = 7),
-    make_dummy_dat_cpue(fleets = 3, years = 69:new_endyr, seas = 1)
-)
-## length comp 
-om_dat$lencomp <- bind_rows(
-        make_dummy_dat_lencomp(fleets = 1, years = c(76:new_endyr), len_bins = om_dat$lbin_vector, nsex = 1),
-        make_dummy_dat_lencomp(fleets = 3, years = c(69:new_endyr), len_bins = om_dat$lbin_vector, nsex = 1)
-    )
-## age comp 
-om_dat$agecomp <- bind_rows(
-        make_dummy_dat_agecomp(fleets = 1, years = c(76:new_endyr), age_bins = om_dat$agebin_vector, nsex = 1),
-        make_dummy_dat_agecomp(fleets = 3, years = c(69:new_endyr), age_bins = om_dat$agebin_vector, nsex = 1)
-    )
-#save new dat file
-SS_writedat(om_dat, file.path(new_OM_dir, "ss3.dat"), overwrite = T)
-
-#run OM 
-r4ss::run(dir = new_OM_dir, exe = "ss", extras = "-nohess", skipfinished = F)
-
-## Create new EM directory 
-em_I <- paste0("em_", n_yrs_fwd)
-new_EM_dir <- file.path(main.dir, "opaka-sim", Iteration, em_I) 
-dir.create(new_EM_dir)
-files_list <- c("em.ctl", "forecast.ss", "starter.ss", "ss.exe")
-file.copy(from = file.path(main.dir, "opaka-sim", Iteration, "em", files_list), 
-to = new_EM_dir, overwrite = T) #TODO: will need to generalize the em path here
-file.copy(from = file.path(main.dir, "opaka-sim", Iteration, "em", "ss3.dat"),
-to = new_EM_dir)
-
-## Sample data from OM 
-dat_exp <- SS_readdat_3.30(file.path(new_OM_dir, "data_expval.ss"))
-### Index data
-dat_samp <- ss3sim::sample_index(dat_exp, fleets = c(1,3), years = list(seq(endyr+1, new_endyr), seq(endyr+1, new_endyr)),
-sds_obs = list(0.13, 0.25), seas = list(7,1))
-samp_ind <- dat_samp$CPUE %>% filter(year > endyr & year <= new_endyr)
-### Catch data
-dat_samp <- ss3sim::sample_catch(dat_samp) 
-samp_catch <- dat_samp$catch %>% filter(year > endyr & year <= new_endyr)
-### Lencomp data 
-dat_samp <- ss3sim::sample_lcomp(dat_samp, fleets = c(1,3), Nsamp = list(600, 45), years = list(seq(endyr+1, new_endyr), seq(endyr+1, new_endyr))) ##TODO: need to think more about Nsamp, cpar, and ESS
-samp_lencomp <- dat_samp$lencomp %>% filter(Yr > endyr & Yr <= new_endyr)
-### Agecomp data 
-dat_samp <- ss3sim::sample_agecomp(dat_samp, fleets = c(1,3), Nsamp = list(45, 45), years = list(seq(endyr+1, new_endyr), seq(endyr+1, new_endyr))) 
-samp_agecomp <- dat_samp$agecomp %>% filter(Yr > endyr & Yr <= new_endyr)
-rm("dat_exp")
-
-## Add new sampled data to previous run's data
-dat_em <- SS_readdat_3.30(file.path(new_EM_dir, "ss3.dat"))
-dat_em$endyr <- new_endyr
-dat_em$catch <- dat_em$catch %>% bind_rows(samp_catch) %>% arrange(fleet, year)
-dat_em$CPUE <- dat_em$CPUE %>% bind_rows(samp_ind) %>% arrange(index, year)
-dat_em$lencomp <- dat_em$lencomp %>% bind_rows(samp_lencomp) %>% arrange(FltSvy, Yr)
-dat_em$agecomp <- dat_em$agecomp %>% bind_rows(samp_agecomp) %>% arrange(FltSvy, Yr)
-## Save new data file 
-SS_writedat_3.30(dat_em, outfile = file.path(new_EM_dir, "ss3.dat"), overwrite = TRUE)
-
-##update last year of recdevs
-ctl_em <- SS_readctl_3.30(file = file.path(new_EM_dir, "em.ctl"), datlist = dat_em)
-ctl_em$MainRdevYrLast <- new_endyr
-SS_writectl(ctl_em, file.path(new_EM_dir, "em.ctl"), overwrite = T)
-
-## Run EM 
-r4ss::run(dir = new_EM_dir, exe = "ss", skipfinished = F)
-
-## Calculate recdev bias adjustments and re-run EM 
-ss3sim::calculate_bias(dir = new_EM_dir, ctl_file_in = file.path(new_EM_dir, "em.ctl")) #TODO not an exported function 
-r4ss::run(dir = new_EM_dir, exe = "ss", skipfinished = F)
-
-## clean up 
-rm(list = c("dat_em", "dat_samp", "om_dat", "newctl", "om_ctl"))
-
-} #end of Iteration loop
-
-rep <- SS_output(dir = new_EM_dir)
-SS_plots(rep)
-
-```
 
 ### Run likelihood profiles
 To profile over an F value for a given year, use the following code: 
