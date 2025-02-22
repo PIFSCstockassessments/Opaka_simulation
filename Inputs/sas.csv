@@ -6,6 +6,6 @@ LRF_poorrec,25,cf,30,0.24,poor
 IRF_SQ,25,cf,45,0.18,normal
 IRF_poorrec,25,cf,45,0.18,poor
 HRF_SQ,25,cf,60,0.15,normal
-HRFpoorrec,25,cf,60,0.15,poor
+HRF_poorrec,25,cf,60,0.15,poor
 IRF_Selex,25,cf,45,0.18,normal
 IRF_Selex_poorrec,25,cf,45,0.18,poor
