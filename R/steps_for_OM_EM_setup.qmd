@@ -14,6 +14,7 @@ source(file.path(main.dir, "R", "simF.r"))
 source(file.path(main.dir, "R", "make_dummy_dat.r"))
 source(file.path(main.dir, "R", "get_fits.r"))
 set.seed <- read.csv(file.path(main.dir, "Inputs", "setseed.csv"))
+sas_full <- read.csv(file.path(main.dir, "Inputs", "sas.csv"))
 niter <- 100
 rep <- SS_output(dir = file.path(main.dir, "models", "03-simplified-mod"))
 ```
@@ -176,20 +177,20 @@ load(file.path(main.dir, "Inputs", "increaseF_mat.RData"))
 
 library(fs)
 
-scen <- "IRF_Selex_poorrec"
+scen <- "HRF_poorrec"
 nyears_fwd <- 25
 niter <- 100
 scen_dirs <- file.path(main.dir, paste(scen, nyears_fwd, "yrfwd", sep = "_"), 1:niter)
 sapply(scen_dirs, dir.create, recursive = T)
-file.copy(from = file.path(main.dir, "Inputs", "recdevs_mat.RData"), file.path(scen_dirs, "recdevs_mat.RData"))
+#file.copy(from = file.path(main.dir, "Inputs", "recdevs_mat.RData"), file.path(scen_dirs, "recdevs_mat.RData"))
 file.copy(from = file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"), file.path(scen_dirs, "poor_recdevs_mat.RData"))
 file.copy(from = file.path(main.dir, "Inputs", "setseed.csv"), file.path(scen_dirs, "setseed.csv"))
 file.copy(from = file.path(main.dir, "Inputs", "sas.csv"), file.path(scen_dirs, "sas.csv"))
 file.copy(from = file.path(main.dir, "Inputs", "constantF_mat.RData"), file.path(scen_dirs, "constantF_mat.RData"))
 
 for(i in 1:length(scen_dirs)){
-    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-om-", nyears_fwd, "-selex")), scen_dirs[i]) #"-FRS-only" #, "-selex"
-    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-em-", nyears_fwd, "-selex")), scen_dirs[i])
+    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-om-", nyears_fwd)), scen_dirs[i]) #"-FRS-only" #, "-selex"
+    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-em-", nyears_fwd)), scen_dirs[i])
 }
 #only for FRS_only_poorrec_25_yrfwd scenario (testing hyperstablity)
 # for(i in 1:length(scen_dirs)){
@@ -199,7 +200,7 @@ for(i in 1:length(scen_dirs)){
 
 for(i in 1:length(scen_dirs)){
     shell(paste0("powershell cd ", scen_dirs[i], ";tar -czf start.tar.gz ./*"))
-    files_clean <- list.files(scen_dirs[i], pattern = ".csv|.RData|opaka-|.dat", full.names = T)
+    files_clean <- list.files(scen_dirs[i], pattern = ".csv|.RData|opaka-", full.names = T)
     unlink(files_clean, recursive = T)
 }
 
@@ -215,11 +216,16 @@ shell(paste0("powershell cd ", main.dir, ";tar -czf upload.", scen, "_25_yrsfwd.
 #get results out of models for comparisons
 all_scenario_names <- paste(sas_full$Scen_name, sas_full$N_years, "yrfwd", sep = "_")
 
+missing_vec <- c()
 for(i in 1:length(all_scenario_names)){
     if(file.exists(file.path(main.dir, paste0("download.", sas_full$Scen_name[i], "_25_yrfwd.tar.gz ")))){
             shell(paste0("powershell cd ", main.dir, ";tar -xzf download.", sas_full$Scen_name[i], "_25_yrfwd.tar.gz ", sas_full$Scen_name[i], "_25_yrfwd/"))
             for(y in 1:niter){
-                shell(paste0("powershell cd ", main.dir, "/", sas_full$Scen_name[i], "_25_yrfwd/", y, ";tar -xzf End.tar.gz"))
+                if(file.exists(file.path(main.dir, paste0(sas_full$Scen_name[i], "_25_yrfwd/"), y, "End.tar.gz"))){
+                    shell(paste0("powershell cd ", main.dir, "/", sas_full$Scen_name[i], "_25_yrfwd/", y, ";tar -xzf End.tar.gz"))
+                }else{
+                    missing_vec <- c(missing_vec, paste0(sas_full$Scen_name[i], "_25_yrfwd/", y))
+                } 
             }
     }else{
         next
@@ -229,17 +235,16 @@ for(i in 1:length(all_scenario_names)){
 
 get_results_all(
     overwrite_files = T,
-    user_scenarios =  c("FRS_only_25_yrfwd", "HRF_SQ_25_yrfwd", "IRF_SQ_25_yrfwd", "LRF_SQ_25_yrfwd"),
-    filename_prefix = "all_scens"
+    user_scenarios =  all_scenario_names[8],
+    filename_prefix = "HRF_poorrec"
 )   
 get_fits_all(
     overwrite_files = T,
-    user_scenarios = c("FRS_only_25_yrfwd", "HRF_SQ_25_yrfwd", "IRF_SQ_25_yrfwd", "LRF_SQ_25_yrfwd"), #all_scenario_names,
-    filename_prefix = "all_scens"
+    user_scenarios = all_scenario_names[8], #all_scenario_names,
+    filename_prefix = "HRF_poorrec"
 )
 
 ```
-
 
 
 ### Checking results

@@ -12,15 +12,15 @@ args <- commandArgs(trailingOnly = TRUE)
 print(args) 
 
 set.seed <- read.csv("setseed.csv")
-sas_full <- read.csv("sas.csv")
-load("constantF_mat.RData")
+sas_full <- read.csv("Inputs/sas.csv")
+load("Inputs/constantF_mat.RData")
 # load("increaseF_mat.RData")
-load("recdevs_mat.RData")
+load("Inputs/poor_recdevs_mat.RData")
 
 #Variables
 nyears <- 100
 nyears_fwd <- 25
-scen <- "IRF_Selex"
+scen <- "IRF_Selexpoorrec"
 
 #Template OM and EM files
 om_dir <- paste0("opaka-om-", nyears_fwd, "-selex/")
@@ -61,7 +61,7 @@ ss3sim_base(
     lcomp_params = lcomp,
     om_dir = om_dir,
     em_dir = em_dir,
-    user_recdevs = full_recdevs,
+    user_recdevs = full_poor_recdevs,
     bias_adjust = T,
     seed = seed
 )
