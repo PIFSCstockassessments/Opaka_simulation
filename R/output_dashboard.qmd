@@ -12,6 +12,7 @@ format:
 library(r4ss)
 library(tidyverse)
 library(ss3sim)
+library(gghighlight)
 main.dir <- this.path::here(.. = 1)
 ```
 
@@ -46,6 +47,8 @@ nonconverged_its <- scalar_df %>%
     mutate(nonconverged_run = paste(scenario, iteration, sep = "_"))
 ```
 
+# Checking inputs  
+
 ### 
 ```{r}
 #filter out non-converged runs
@@ -56,15 +59,40 @@ results_ts <- ts_df %>%
 
 #calculate relative error of SSB
 ts_re <- calculate_re(results_ts)
+```
 
-# ts_re %>%
-# group_by(scenario, year) %>% 
-# ggplot() +
-# geom_hline(yintercept = 0, color = "grey60") +
-# geom_line(aes(x = year, y = SpawnBio_re, group= iteration, color = factor(iteration)), linewidth = 1.2) +
-# labs(x = "Year", y = "SSB MRE") + 
-# facet_wrap(~scenario) +
-# theme_bw()
+### 
+```{r}
+
+results_ts %>% 
+mutate(rec_scen = ifelse(str_detect(scenario, "SQ"), "SQ", "poorrec")) %>% 
+mutate(rec_scen = ifelse(str_detect(scenario, "FRS_only_25_yrfwd"), "SQ", rec_scen)) %>%
+filter(model_run == "om") %>% 
+filter(iteration < 51) %>%
+ggplot() +
+geom_line(aes(x = year, y = rec_dev, group = scenario, color = rec_scen)) +
+geom_hline(yintercept = 0) +
+facet_wrap(~iteration) +
+labs(subtitle = "Recruitment deviations in OMs for SQ and poor rec scenarios", x = "Year", y = "Recruitment Deviations")
+```
+```{r}
+results_ts %>% 
+mutate(rec_scen = ifelse(str_detect(scenario, "SQ"), "SQ", "poorrec")) %>% 
+mutate(rec_scen = ifelse(str_detect(scenario, "FRS_only_25_yrfwd"), "SQ", rec_scen)) %>%
+filter(model_run == "om") %>% 
+filter(iteration > 50) %>%
+ggplot() +
+geom_line(aes(x = year, y = rec_dev, group = scenario, color = rec_scen)) +
+geom_hline(yintercept = 0) +
+facet_wrap(~iteration) +
+labs(subtitle = "Recruitment deviations in OMs for SQ and poor rec scenarios", x = "Year", y = "Recruitment Deviations")
+```
+
+# Outputs 
+
+###  
+
+```{r}
 
 ts_re %>%
 group_by(scenario, year) %>% 
@@ -79,9 +107,69 @@ facet_wrap(~scenario) +
 labs(x = "Year", y = "SSB MRE") + 
 theme_bw()
 
+ts_re %>%
+group_by(scenario, year) %>% 
+summarise(med_re = quantile(SpawnBio_re, .5)) %>% 
+ggplot() +
+geom_hline(yintercept = 0, color = "grey60") +
+geom_line(aes(x = year, y = med_re, color = scenario), linewidth = 1.2) +
+gghighlight(str_detect(scenario, "poorrec")) +
+labs(x = "Year", y = "SSB MRE") + 
+theme_bw()
+
+ts_re %>%
+group_by(scenario, year) %>% 
+summarise(med_re = quantile(SpawnBio_re, .5)) %>% 
+ggplot() +
+geom_hline(yintercept = 0, color = "grey60") +
+geom_line(aes(x = year, y = med_re, color = scenario), linewidth = 1.2) +
+gghighlight(str_detect(scenario, "FRS_only_25_yrfwd|SQ")) +
+labs(x = "Year", y = "SSB MRE") + 
+theme_bw()
+
+
 ```
 
 
+```{r}
+ts_re %>%
+group_by(scenario, year) %>% 
+summarise(med_re = quantile(F_1_re, .5), uci = quantile(F_1_re, .95), lci = quantile(F_1_re, .05)) %>% 
+ggplot() +
+geom_hline(yintercept = 0, color = "grey60") +
+geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scenario), alpha = .5) + 
+geom_line(aes(x = year, y = med_re, color = scenario), linewidth = 1.2) +
+facet_wrap(~scenario) + 
+labs(x = "Year", y = "F MRE") + 
+theme_bw()
+
+```
+```{r}
+## plots for relative error of management specific values 
+
+results_scalar <- scalar_df %>%  
+    mutate(run_ID = paste(scenario, iteration, sep = "_")) %>% 
+    filter(! run_ID %in% nonconverged_its$nonconverged_run) %>% 
+    select(-run_ID)
+
+scalar_re <- calculate_re(results_scalar)
+
+## quantities to keep track of 
+### depletion_re, F_MSY_re, SR_LN_R0_re, SSB_MSY_re, Totbio_Unfished_re
+
+scalar_re %>% 
+select(c(iteration, scenario, depletion_re, SR_LN_R0_re, SSB_MSY_re)) %>%
+pivot_longer(cols = c(depletion_re, SR_LN_R0_re, SSB_MSY_re)) %>% 
+ggplot() +
+geom_boxplot(aes(x = name, y = value, fill = scenario)) + 
+geom_hline(yintercept = 0, color = "grey50", linetype = 2) +
+labs(x = "Management Quants", y = "RE") + 
+theme_classic()
+
+
+```
+
+# Diagnostics  
 ```{r}
 index_df <- index_df %>% 
     mutate(run_ID = paste(scenario, iteration, sep = "_")) %>% 
@@ -112,7 +200,9 @@ geom_smooth(aes(group = scenario, color = scenario)) +
 facet_wrap(~scenario, scales = "free_x") + 
 ylim(-.5, .5) +
 theme_classic()
+```
 
+```{r}
 ## runstest 
 runs_list <- index_df |> filter(model_run == "em") |> mutate(resid = log(Obs) - log(Exp)) |> group_by(scenario, iteration, Fleet) |> group_map(~randtests::runs.test(.x$resid, alternative = "left.sided"))
 
@@ -129,45 +219,5 @@ theme_classic()
 
 ```
 
-###
-```{r}
-## plots for relative error of management specific values 
 
-results_scalar <- scalar_df %>%  
-    mutate(run_ID = paste(scenario, iteration, sep = "_")) %>% 
-    filter(! run_ID %in% nonconverged_its$nonconverged_run) %>% 
-    select(-run_ID)
-
-scalar_re <- calculate_re(results_scalar)
-
-## quantities to keep track of 
-### depletion_re, F_MSY_re, SR_LN_R0_re, SSB_MSY_re, Totbio_Unfished_re
-
-scalar_re %>% 
-select(c(iteration, scenario, depletion_re, SR_LN_R0_re, SSB_MSY_re)) %>%
-pivot_longer(cols = c(depletion_re, SR_LN_R0_re, SSB_MSY_re)) %>% 
-ggplot() +
-geom_boxplot(aes(x = name, y = value, fill = scenario)) + 
-geom_hline(yintercept = 0, color = "grey50", linetype = 2) +
-labs(x = "Management Quants", y = "RE") + 
-theme_classic()
-
-
-```
-
-### 
-
-```{r}
-#| eval: false
-like_dir <- file.path(main.dir, "opaka-sim", "1", "em_5", "likelihood_prof")
-piner_plot <- list.files(like_dir, pattern = "profile_plot_likelihood", full.names = T)
-library(png)
-
-img <- readPNG(piner_plot[1])
-grid::grid.raster(img)
-# knitr::include_graphics(path = normalizePath("../opaka-sim/1/em_5/likelihood_prof/profile_plot_likelihood.png"))
-#knitr::include_graphics(piner_plot[1])
- 
-
-```
 
