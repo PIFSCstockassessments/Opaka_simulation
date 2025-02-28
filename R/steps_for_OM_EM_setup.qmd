@@ -28,9 +28,60 @@ filter(str_detect(Label, "Rec")) %>%
 select(c(Label, Value)) %>% 
 separate(col = Label, sep = "_", into = c("period", "recdev", "year")) 
 
+
+ssb <- rep$derived_quants %>% 
+filter(str_detect(Label, "SSB")) %>%
+separate(col = Label, into = c("SSB", "Year"), sep = "_") %>%
+mutate(Year = as.numeric(Year)) %>%
+filter(!is.na(Year)) %>% 
+pull(Value)
+
+rec <- rep$derived_quants %>% 
+filter(str_detect(Label, "Rec")) %>% 
+separate(col = Label, into = c("Rec", "Year"), sep = "_") %>%
+mutate(Year = as.numeric(Year)) %>%
+filter(!is.na(Year)) %>% 
+select(Year, Value) %>% 
+rename("Rec" = "Value") %>% 
+mutate("SSB" = ssb, 
+"SR_rec" = (SSB*4*.76*180.859)/(1466.7*(1-.76)+SSB*(5*.76-1)),
+"Calc_rec" = SR_rec*exp(c(0,recdevs_df$Value)), 
+"Rec_dev" = c(0, recdevs_df$Value))
+
+dec_rec <- seq(263.5500, 100.5675, length.out = 11) #getting recruitment down to 40% reduction level
+
+dec_rec_2 <- rnorm(n = 15, mean = 100.5675, sd = 25)
+dec_rec_full <- c(dec_rec[-1], dec_rec_2)
+test_recdevs <- log(dec_rec_full/167.6124)
+test_recdevs_mat <- matrix(data = c(0,recdevs_df$Value,test_recdevs), ncol = 1)
+
+reptest <- SS_output(file.path(main.dir, "FRS_only_poorrec_25_yrfwd", "1", "om"))
+reptest_rec <- reptest$derived_quants %>%
+filter(str_detect(Label, "Rec")) %>% 
+separate(col = Label, into = c("Rec", "Year"), sep = "_") %>%
+mutate(Year = as.numeric(Year)) %>%
+filter(!is.na(Year)) %>% pull(Value)
+
+
+plot(rec$Year, y = rec$SR_rec, type = "l", col = "orange", xlim = c(1,100), ylim = c(0,800))
+abline(h = 187.0477, col = "darkblue", lty = 2) #mean Rec
+abline(h = 167.6124, col = "darkorange", lty = 2) #mean SR recruitment
+abline(h = 100.5675, col = "red4", lty = 2) #reduced by 40% mean SR recruitment
+lines(rec$Year, y = rec$Rec, col = "blue")
+lines(rec$Year, y = rec$Calc_rec, col = "blue", lty = 2)
+lines(76:85, y = dec_rec[-1], col = "red", lty = 3, lwd = 1.5)
+lines(86:100, y = dec_rec_2, col = "red", lty = 3, lwd = 1.5)
+lines(1:100, y = reptest_rec, col = "red")
+
+plot(x = recdevs_df$year, y = recdevs_df$Value, type = "l", xlim = c(1,100))
+lines(x = 76:100, y = test_recdevs, lty = 3, col = "blue")
+abline(h = 0)
+```
+```{r}
 plot(x = recdevs_df$year, y = recdevs_df$Value, type = "l")
-sigmar <- .657 #from opaka model
+sigmar <- .1 #.657 from opaka model
 new_recdevs <- matrix(data = NA, nrow = nrow(recdevs_df)+1, ncol = 100)
+recdevs <- matrix(data = NA, nrow = nrow(recdevs_df)+1, ncol = 100)
 new_recdevs[1,] <- 0
 for(i in 2:nrow(new_recdevs)){
     if(i < 60){
@@ -41,9 +92,9 @@ for(i in 2:nrow(new_recdevs)){
                                  r = 1-1e-5, #correlation
                                  sd = recdev_sd)[,1]
     }else{
-        recdev_sd <- 0.14 #(sigmar^2/2 lognormal bias correction?)
-        recdevs <- rnorm(n = 100, mean = 0, sd = sigmar)  
-        new_recdevs[i,] <- sigmar * recdevs - sigmar^2 / 2 
+        #recdev_sd <- 0.14 #(sigmar^2/2 lognormal bias correction?)
+        recdevs[i,] <- rnorm(n = 100, mean = 0, sd = sigmar)  
+        new_recdevs[i,] <- sigmar * recdevs[i,] - sigmar^2 / 2 
         # new_recdevs[i,] <- faux::rnorm_multi(n = 100, ## year vector
         #                          vars = 1,
         #                          mu = 0,
@@ -55,8 +106,13 @@ for(i in 2:nrow(new_recdevs)){
 }
 matplot(new_recdevs, type = "l")
 
+med_rec <- apply(recdevs, 1, quantile, .5, na.rm = T)
+plot(x = seq(1,75), y = new_recdevs[,1])
+lines(x = seq(1,75), y = recdevs[,1], col = "red")
+lines(x = seq(1,75), y = med_rec, col = "blue")
+abline(h=0)
 # png(file.path(main.dir, "Model_Runs", '2024-12-03-rdevs_array.png'), height = 8, width =8, unit = 'in', res =400)
-matplot(y = new_recdevs, type = "l", lty = 1, lwd = 1.2)
+matplot(y = new_recdevs[,1:5], type = "l", lty = 1, lwd = 1.2)
 abline(h = 0)
 #lines(x = 2:75, y = recdevs_df$Value, col = "red", lwd = 2, lty = 2)
 # dev.off()
@@ -64,28 +120,28 @@ abline(h = 0)
 
 future_recdevs <- matrix(data = NA, nrow = 50, ncol = 100)
 for(i in 1:nrow(future_recdevs)){ 
-    recdevs <- rnorm(n = 100, mean = 0, sd = 0.)   
+    recdevs <- rnorm(n = 100, mean = 0, sd = 0.1)   
     future_recdevs[i,] <- sigmar * recdevs - sigmar^2 / 2 
 }
 matplot(y = future_recdevs, type = "l")
 
 full_recdevs <- rbind(new_recdevs, future_recdevs)
-# save(list = "full_recdevs", file = file.path(main.dir, "Inputs", "recdevs_mat.RData"))
+#save(list = "full_recdevs", file = file.path(main.dir, "Inputs", "recdevs_mat.RData"))
 matplot(y = full_recdevs, type = "l")
 
 ## years of poor recruitment in the future
 poor_recdevs <- matrix(data = NA, nrow = 50, ncol = 100)
 #vector of declining mu, declines by 40% over 25 years
-mu.vec <- sort(stats::runif(n=20,min = -.40,max=0), decreasing =T)
-recdev_sd <- .52 #half of sigmaR? Check about log scale
-plot(x = 1:20, y = mu.vec, type = "l")
+mu.vec <- sort(stats::runif(n=10,min = -.60,max=0), decreasing =T)
+recdev_sd <- .1 #half of sigmaR? Check about log scale
+plot(x = 1:10, y = mu.vec, type = "l")
 for(i in 1:nrow(poor_recdevs)){
-    if(i <= 20){
+    if(i <= 10){
         recdevs <- rnorm(n = 100, mean = mu.vec[i], sd = recdev_sd)  
         poor_recdevs[i,] <- recdev_sd * recdevs - recdev_sd^2 / 2 
         
     }else{
-        recdevs <- rnorm(n = 100, mean = -.4, sd = recdev_sd)  
+        recdevs <- rnorm(n = 100, mean = -.6, sd = recdev_sd)  
         poor_recdevs[i,] <- recdev_sd * recdevs - recdev_sd^2 / 2
     }
 
@@ -93,24 +149,13 @@ for(i in 1:nrow(poor_recdevs)){
 
 matplot(y = poor_recdevs, type = "l")
 full_poor_recdevs <- rbind(new_recdevs, poor_recdevs) #same recdevs for years 1-75 as full_recdevs, then add poor recdevs for future
-matplot(y = full_poor_recdevs, type = "l")
+matplot(y = full_poor_recdevs[70:100,], type = "l")
+matplot(y = full_recdevs[70:100,], type = "l", add = T)
 abline(h = 0)
-abline(v=76)
-abline(v=95)
+abline(v=6)
+abline(v=100)
 # lines(x = 76:95, y = mu.vec, lty = 2, col = "red")
 # save(list = "full_poor_recdevs", file = file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"))
-
-# recdev_sd <- 0.2
-# poor_recdevs <- matrix(data = NA, nrow = 50, ncol = 100)
-# for(i in 1:nrow(poor_recdevs)){ 
-#     poor_recdevs[i,] <- faux::rnorm_multi(n = 100, ## year vector
-#                                 vars = 1,
-#                                 mu = -.2,
-#                                 r = 1-1e-5, #correlation
-#                                 sd = recdev_sd)[,1]
-# }
-# matplot(y = poor_recdevs, type = "l")
-# abline(h = 0)
 
 # full_poor_recdevs <- rbind(full_recdevs[1:75,], poor_recdevs) #same recdevs for years 1-75 as full_recdevs, then add poor recdevs for future
 # matplot(y = full_poor_recdevs, type = "l")
@@ -177,7 +222,7 @@ load(file.path(main.dir, "Inputs", "increaseF_mat.RData"))
 
 library(fs)
 
-scen <- "HRF_poorrec"
+scen <- "FRS_only_poorrec"
 nyears_fwd <- 25
 niter <- 100
 scen_dirs <- file.path(main.dir, paste(scen, nyears_fwd, "yrfwd", sep = "_"), 1:niter)
@@ -189,8 +234,8 @@ file.copy(from = file.path(main.dir, "Inputs", "sas.csv"), file.path(scen_dirs, 
 file.copy(from = file.path(main.dir, "Inputs", "constantF_mat.RData"), file.path(scen_dirs, "constantF_mat.RData"))
 
 for(i in 1:length(scen_dirs)){
-    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-om-", nyears_fwd)), scen_dirs[i]) #"-FRS-only" #, "-selex"
-    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-em-", nyears_fwd)), scen_dirs[i])
+    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-om-", nyears_fwd, "-FRS-only")), scen_dirs[i]) #"-FRS-only" #, "-selex"
+    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-em-", nyears_fwd,"-FRS-only")), scen_dirs[i])
 }
 #only for FRS_only_poorrec_25_yrfwd scenario (testing hyperstablity)
 # for(i in 1:length(scen_dirs)){
@@ -235,13 +280,13 @@ for(i in 1:length(all_scenario_names)){
 
 get_results_all(
     overwrite_files = T,
-    user_scenarios =  all_scenario_names[8],
-    filename_prefix = "HRF_poorrec"
+    user_scenarios =  all_scenario_names,
+    filename_prefix = "all_scens"
 )   
 get_fits_all(
     overwrite_files = T,
-    user_scenarios = all_scenario_names[8], #all_scenario_names,
-    filename_prefix = "HRF_poorrec"
+    user_scenarios = all_scenario_names, #all_scenario_names,
+    filename_prefix = "all_scens"
 )
 
 ```
@@ -253,9 +298,9 @@ get_fits_all(
 
 rep <- SS_output(file.path(main.dir, "SQ_0_yrfwd", "1", "em"))
 SS_plots(rep)
-reps <- SSgetoutput(dirvec = c(#file.path(main.dir, "SQ_15_yrfwd", "1", "om"),
-file.path(main.dir, "IRF_Selex_25_yrfwd", "1", "om"),
-file.path(main.dir, "IRF_Selex_25_yrfwd", "1", "em")
+reps <- SSgetoutput(dirvec = c(
+file.path(main.dir, "FRS_only_poorrec_25_yrfwd", "1", "om"),
+file.path(main.dir, "FRS_only_poorrec_25_yrfwd", "1", "em")
 ))
 
 rep_1 <- SS_output(dir = dir, covar = FALSE, verbose = FALSE,
@@ -270,9 +315,10 @@ file.path(main.dir, "HRF_poorrec_25_yrfwd", "2", "em")
 
 reps_sum <- SSsummarize(reps)
 SSplotComparisons(reps_sum, legendlabels = c("SQ_om", "SQ_em", "PR_om", "PR_em"))
-SSplotComparisons(reps_sum, models = c(1,2), legendlabels = c("SQ_om", "SQ_em"), uncertainty = F, xlim = c(75,76))
+SSplotComparisons(reps_sum, models = c(1,2), legendlabels = c("om", "em"))
 SS_plots(reps$replist4)
 SS_plots(reps$replist2)
+SS_plots(reps$replist3)
 
 reps$replist2$breakpoints_for_bias_adjustment_ramp
 new_bias <- SS_fitbiasramp(reps$replist4)
