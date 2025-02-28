@@ -21,7 +21,7 @@ rep <- SS_output(dir = file.path(main.dir, "models", "03-simplified-mod"))
 
 
 ### Create rec dev timeseries
-Use estimated rec devs from "03-simplified-mod" but add some noise to the last 10 years. Then simulate future recruitment trajectories. Future_recdevs is stable recruitment devs centered around 0 with an sd of 0.16. Poor_recdevs simulates declining productivity by ~30% over the first 20 years and then stable, low productivity for the next 30 years. 
+I generated a time series of recruitment deviations that result in a 40% decline in average recruitment. To do this, I first calculated the expected recruitment based on the stock-recruitment curve for the first 75 years (solid yellow line). I found the average of that (dotted yellow line) and what a 40% decrease would be. From there, I created a vector of values that decline from the last year of recruitment to the new average recruitment, with variability. Below is example code for one timeseries. 
 ```{r}
 recdevs_df <- rep$parameters %>% 
 filter(str_detect(Label, "Rec")) %>% 
@@ -73,13 +73,14 @@ lines(76:85, y = dec_rec[-1], col = "red", lty = 3, lwd = 1.5)
 lines(86:100, y = dec_rec_2, col = "red", lty = 3, lwd = 1.5)
 lines(1:100, y = reptest_rec, col = "red")
 
-plot(x = recdevs_df$year, y = recdevs_df$Value, type = "l", xlim = c(1,100))
-lines(x = 76:100, y = test_recdevs, lty = 3, col = "blue")
-abline(h = 0)
 ```
+
+#### Rec dev matrix  
+Create 100 rec dev trajectories for 75 years, with added variability (sigmaR = .25) in the last 10 years. The first 65 years will follow the recruitment deviations that came out of the assessment model to retain any sort of environmental signal it may have picked up on.  
+
 ```{r}
 plot(x = recdevs_df$year, y = recdevs_df$Value, type = "l")
-sigmar <- .1 #.657 from opaka model
+sigmar <- .15 #.657 from opaka model
 new_recdevs <- matrix(data = NA, nrow = nrow(recdevs_df)+1, ncol = 100)
 recdevs <- matrix(data = NA, nrow = nrow(recdevs_df)+1, ncol = 100)
 new_recdevs[1,] <- 0
@@ -92,60 +93,57 @@ for(i in 2:nrow(new_recdevs)){
                                  r = 1-1e-5, #correlation
                                  sd = recdev_sd)[,1]
     }else{
-        #recdev_sd <- 0.14 #(sigmar^2/2 lognormal bias correction?)
-        recdevs[i,] <- rnorm(n = 100, mean = 0, sd = sigmar)  
+        recdevs[i,] <- rnorm(n = 100, mean = 0, sd = 1)  
         new_recdevs[i,] <- sigmar * recdevs[i,] - sigmar^2 / 2 
-        # new_recdevs[i,] <- faux::rnorm_multi(n = 100, ## year vector
-        #                          vars = 1,
-        #                          mu = 0,
-        #                          r = 1-1e-5, #correlation
-        #                          sd = recdev_sd)[,1]
     }
 
 
 }
-matplot(new_recdevs, type = "l")
-
-med_rec <- apply(recdevs, 1, quantile, .5, na.rm = T)
-plot(x = seq(1,75), y = new_recdevs[,1])
-lines(x = seq(1,75), y = recdevs[,1], col = "red")
-lines(x = seq(1,75), y = med_rec, col = "blue")
-abline(h=0)
-# png(file.path(main.dir, "Model_Runs", '2024-12-03-rdevs_array.png'), height = 8, width =8, unit = 'in', res =400)
-matplot(y = new_recdevs[,1:5], type = "l", lty = 1, lwd = 1.2)
-abline(h = 0)
-#lines(x = 2:75, y = recdevs_df$Value, col = "red", lwd = 2, lty = 2)
-# dev.off()
-# save(list = "new_recdevs", file = file.path(main.dir, "Inputs", "recdevs_mat.RData"))
-
+matplot(new_recdevs, type = "l", ylim = c(-1,2))
+```
+Then we add 25 years of assumed "normal" future recruitment, with the same variaiblity as the last 10 years of the historical recdevs (sigmaR = 0.25).
+```{r}
 future_recdevs <- matrix(data = NA, nrow = 50, ncol = 100)
 for(i in 1:nrow(future_recdevs)){ 
-    recdevs <- rnorm(n = 100, mean = 0, sd = 0.1)   
+    recdevs <- rnorm(n = 100, mean = 0, sd = 1)   
     future_recdevs[i,] <- sigmar * recdevs - sigmar^2 / 2 
 }
 matplot(y = future_recdevs, type = "l")
 
 full_recdevs <- rbind(new_recdevs, future_recdevs)
-#save(list = "full_recdevs", file = file.path(main.dir, "Inputs", "recdevs_mat.RData"))
 matplot(y = full_recdevs, type = "l")
-
+#save(list = "full_recdevs", file = file.path(main.dir, "Inputs", "recdevs_mat.RData"))
+```
+We also create 25 years of "poor" future recruitment. 
+```{r}
 ## years of poor recruitment in the future
-poor_recdevs <- matrix(data = NA, nrow = 50, ncol = 100)
-#vector of declining mu, declines by 40% over 25 years
-mu.vec <- sort(stats::runif(n=10,min = -.60,max=0), decreasing =T)
-recdev_sd <- .1 #half of sigmaR? Check about log scale
-plot(x = 1:10, y = mu.vec, type = "l")
-for(i in 1:nrow(poor_recdevs)){
-    if(i <= 10){
-        recdevs <- rnorm(n = 100, mean = mu.vec[i], sd = recdev_sd)  
-        poor_recdevs[i,] <- recdev_sd * recdevs - recdev_sd^2 / 2 
-        
-    }else{
-        recdevs <- rnorm(n = 100, mean = -.6, sd = recdev_sd)  
-        poor_recdevs[i,] <- recdev_sd * recdevs - recdev_sd^2 / 2
-    }
+poor_recdevs <- matrix(data = NA, nrow = 25, ncol = 100)
+sr_rec75 <- rec$SR_rec[75]
+sigmar <- .15
+for(i in 1:ncol(new_recdevs)){
+    
+    Calc_rec = sr_rec75*exp(new_recdevs[75,i]) #calculate new recruitment for year 75
+    dec_rec <- seq(Calc_rec, 100.5675, length.out = 11) #getting recruitment down to 40% reduction level
+    dec_rec_full <- c(dec_rec[-1], rep(100.5675, 15))
+    dec_recdevs <- log(dec_rec_full/167.6124)
+    poor_recdevs[,i] <- rnorm(25, mean = dec_recdevs, sd = .15)
 
 }
+full_poor_recdevs <- rbind(new_recdevs, poor_recdevs)
+matplot(y = full_poor_recdevs, type = "l")
+matplot(y = full_recdevs, type = "l", add = T)
+abline(h = 0)
+abline(v = 75)
+
+reptest <- SS_output(file.path(main.dir, "FRS_only_poorrec_25_yrfwd", "1", "om"))
+reptest_rec <- reptest$derived_quants %>%
+filter(str_detect(Label, "Rec")) %>% 
+separate(col = Label, into = c("Rec", "Year"), sep = "_") %>%
+mutate(Year = as.numeric(Year)) %>%
+filter(!is.na(Year)) %>% pull(Value)
+
+
+
 
 matplot(y = poor_recdevs, type = "l")
 full_poor_recdevs <- rbind(new_recdevs, poor_recdevs) #same recdevs for years 1-75 as full_recdevs, then add poor recdevs for future
@@ -222,13 +220,13 @@ load(file.path(main.dir, "Inputs", "increaseF_mat.RData"))
 
 library(fs)
 
-scen <- "FRS_only_poorrec"
+scen <- "FRS_only"
 nyears_fwd <- 25
 niter <- 100
 scen_dirs <- file.path(main.dir, paste(scen, nyears_fwd, "yrfwd", sep = "_"), 1:niter)
 sapply(scen_dirs, dir.create, recursive = T)
-#file.copy(from = file.path(main.dir, "Inputs", "recdevs_mat.RData"), file.path(scen_dirs, "recdevs_mat.RData"))
-file.copy(from = file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"), file.path(scen_dirs, "poor_recdevs_mat.RData"))
+file.copy(from = file.path(main.dir, "Inputs", "recdevs_mat.RData"), file.path(scen_dirs, "recdevs_mat.RData"))
+#file.copy(from = file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"), file.path(scen_dirs, "poor_recdevs_mat.RData"))
 file.copy(from = file.path(main.dir, "Inputs", "setseed.csv"), file.path(scen_dirs, "setseed.csv"))
 file.copy(from = file.path(main.dir, "Inputs", "sas.csv"), file.path(scen_dirs, "sas.csv"))
 file.copy(from = file.path(main.dir, "Inputs", "constantF_mat.RData"), file.path(scen_dirs, "constantF_mat.RData"))
