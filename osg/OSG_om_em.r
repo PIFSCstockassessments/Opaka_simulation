@@ -15,16 +15,16 @@ set.seed <- read.csv("setseed.csv")
 sas_full <- read.csv("Inputs/sas.csv")
 load("Inputs/constantF_mat.RData")
 # load("increaseF_mat.RData")
-load("Inputs/poor_recdevs_mat.RData")
+load("Inputs/recdevs_mat.RData")
 
 #Variables
 nyears <- 100
 nyears_fwd <- 25
-scen <- "IRF_Selexpoorrec"
+scen <- "HRF_SQ"
 
 #Template OM and EM files
-om_dir <- paste0("opaka-om-", nyears_fwd, "-selex/")
-em_dir <- paste0("opaka-em-", nyears_fwd, "-selex/")
+om_dir <- paste0("opaka-om-", nyears_fwd) #, "-selex/" "-FRS-only"
+em_dir <- paste0("opaka-em-", nyears_fwd)
 
 #Get iteration number
 I <- as.numeric(tail(strsplit(args[1], "/")[[1]], n = 1))
@@ -42,7 +42,7 @@ index <- list(
     fleets = c(1, 3), 
     years = list(seq(1, 75, by = 1), seq(69, nyears, by = 1)),
     seas = list(7,1), 
-    sds_obs = list(0.2, 0.10),
+    sds_obs = list(0.2, 0.05),
     sds_out = list(0.13, sas[which(sas$N_years == nyears_fwd), "Resfish_index_CV"]) 
 )
 
@@ -55,13 +55,13 @@ seed <- set.seed[I,2]
 
 ss3sim_base(
     iterations = I,
-    scenarios = paste(scen, nyears_fwd, "yrfwd", sep = "_"), 
+    scenarios = "HRF_SQ_test_",  #paste(scen, nyears_fwd, "yrfwd", sep = "_"), 
     f_params = F_list,
     index_params = index,
     lcomp_params = lcomp,
-    om_dir = om_dir,
-    em_dir = em_dir,
-    user_recdevs = full_poor_recdevs,
-    bias_adjust = T,
+    om_dir = file.path(main.dir, "models", om_dir),
+    em_dir = file.path(main.dir, "models", em_dir),
+    user_recdevs = full_recdevs,
+    bias_adjust = F,
     seed = seed
 )

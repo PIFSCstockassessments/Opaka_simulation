@@ -76,7 +76,7 @@ lines(1:100, y = reptest_rec, col = "red")
 ```
 
 #### Rec dev matrix  
-Create 100 rec dev trajectories for 75 years, with added variability (sigmaR = .25) in the last 10 years. The first 65 years will follow the recruitment deviations that came out of the assessment model to retain any sort of environmental signal it may have picked up on.  
+Create 100 rec dev trajectories for 75 years, with added variability (sigmaR = .15) in the last 10 years. The first 65 years will follow the recruitment deviations that came out of the assessment model to retain any sort of environmental signal it may have picked up on.  
 
 ```{r}
 plot(x = recdevs_df$year, y = recdevs_df$Value, type = "l")
@@ -101,7 +101,7 @@ for(i in 2:nrow(new_recdevs)){
 }
 matplot(new_recdevs, type = "l", ylim = c(-1,2))
 ```
-Then we add 25 years of assumed "normal" future recruitment, with the same variaiblity as the last 10 years of the historical recdevs (sigmaR = 0.25).
+Then we add 25 years of assumed "normal" future recruitment, with the same variaiblity as the last 10 years of the historical recdevs (sigmaR = 0.15).
 ```{r}
 future_recdevs <- matrix(data = NA, nrow = 50, ncol = 100)
 for(i in 1:nrow(future_recdevs)){ 
@@ -135,29 +135,6 @@ matplot(y = full_recdevs, type = "l", add = T)
 abline(h = 0)
 abline(v = 75)
 
-reptest <- SS_output(file.path(main.dir, "FRS_only_poorrec_25_yrfwd", "1", "om"))
-reptest_rec <- reptest$derived_quants %>%
-filter(str_detect(Label, "Rec")) %>% 
-separate(col = Label, into = c("Rec", "Year"), sep = "_") %>%
-mutate(Year = as.numeric(Year)) %>%
-filter(!is.na(Year)) %>% pull(Value)
-
-
-
-
-matplot(y = poor_recdevs, type = "l")
-full_poor_recdevs <- rbind(new_recdevs, poor_recdevs) #same recdevs for years 1-75 as full_recdevs, then add poor recdevs for future
-matplot(y = full_poor_recdevs[70:100,], type = "l")
-matplot(y = full_recdevs[70:100,], type = "l", add = T)
-abline(h = 0)
-abline(v=6)
-abline(v=100)
-# lines(x = 76:95, y = mu.vec, lty = 2, col = "red")
-# save(list = "full_poor_recdevs", file = file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"))
-
-# full_poor_recdevs <- rbind(full_recdevs[1:75,], poor_recdevs) #same recdevs for years 1-75 as full_recdevs, then add poor recdevs for future
-# matplot(y = full_poor_recdevs, type = "l")
-# abline(h = 0)
 # save(list = "full_poor_recdevs", file = file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"))
 ```
 
@@ -220,7 +197,7 @@ load(file.path(main.dir, "Inputs", "increaseF_mat.RData"))
 
 library(fs)
 
-scen <- "FRS_only"
+scen <- "HRF_SQ"
 nyears_fwd <- 25
 niter <- 100
 scen_dirs <- file.path(main.dir, paste(scen, nyears_fwd, "yrfwd", sep = "_"), 1:niter)
@@ -232,8 +209,8 @@ file.copy(from = file.path(main.dir, "Inputs", "sas.csv"), file.path(scen_dirs, 
 file.copy(from = file.path(main.dir, "Inputs", "constantF_mat.RData"), file.path(scen_dirs, "constantF_mat.RData"))
 
 for(i in 1:length(scen_dirs)){
-    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-om-", nyears_fwd, "-FRS-only")), scen_dirs[i]) #"-FRS-only" #, "-selex"
-    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-em-", nyears_fwd,"-FRS-only")), scen_dirs[i])
+    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-om-", nyears_fwd)), scen_dirs[i]) #"-FRS-only" #, "-selex"
+    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-em-", nyears_fwd)), scen_dirs[i])
 }
 #only for FRS_only_poorrec_25_yrfwd scenario (testing hyperstablity)
 # for(i in 1:length(scen_dirs)){
@@ -242,8 +219,9 @@ for(i in 1:length(scen_dirs)){
 # }
 
 for(i in 1:length(scen_dirs)){
+    
     shell(paste0("powershell cd ", scen_dirs[i], ";tar -czf start.tar.gz ./*"))
-    files_clean <- list.files(scen_dirs[i], pattern = ".csv|.RData|opaka-", full.names = T)
+    files_clean <- list.files(scen_dirs[i], pattern = ".csv|.RData|opaka-|normal_rec.dat", full.names = T)
     unlink(files_clean, recursive = T)
 }
 
@@ -278,13 +256,13 @@ for(i in 1:length(all_scenario_names)){
 
 get_results_all(
     overwrite_files = T,
-    user_scenarios =  all_scenario_names,
-    filename_prefix = "all_scens"
+    user_scenarios =  all_scenario_names[c(1,2,7,8)],
+    filename_prefix = "FRS_HRF_scens"
 )   
 get_fits_all(
     overwrite_files = T,
-    user_scenarios = all_scenario_names, #all_scenario_names,
-    filename_prefix = "all_scens"
+    user_scenarios = all_scenario_names[c(1,2,7,8)], #all_scenario_names,
+    filename_prefix = "FRS_HRF_scens"
 )
 
 ```
@@ -297,8 +275,8 @@ get_fits_all(
 rep <- SS_output(file.path(main.dir, "SQ_0_yrfwd", "1", "em"))
 SS_plots(rep)
 reps <- SSgetoutput(dirvec = c(
-file.path(main.dir, "FRS_only_poorrec_25_yrfwd", "1", "om"),
-file.path(main.dir, "FRS_only_poorrec_25_yrfwd", "1", "em")
+file.path(main.dir, "HRF_SQ_test_", "1", "om"),
+file.path(main.dir, "HRF_SQ_test_", "1", "em")
 ))
 
 rep_1 <- SS_output(dir = dir, covar = FALSE, verbose = FALSE,
@@ -313,7 +291,7 @@ file.path(main.dir, "HRF_poorrec_25_yrfwd", "2", "em")
 
 reps_sum <- SSsummarize(reps)
 SSplotComparisons(reps_sum, legendlabels = c("SQ_om", "SQ_em", "PR_om", "PR_em"))
-SSplotComparisons(reps_sum, models = c(1,2), legendlabels = c("om", "em"))
+SSplotComparisons(reps_sum, models = c(1,2), legendlabels = c("om", "em"), uncertainty = F)
 SS_plots(reps$replist4)
 SS_plots(reps$replist2)
 SS_plots(reps$replist3)

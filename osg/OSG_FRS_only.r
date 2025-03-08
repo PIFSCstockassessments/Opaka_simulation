@@ -59,8 +59,8 @@ sas <- sas_full %>% filter(Scen_name == scen)
         f_params = F_list,
         index_params = index,
         agecomp_params = agecomp,
-        om_dir = om_dir,
-        em_dir = em_dir,
+        om_dir = file.path(main.dir, "models", om_dir),
+        em_dir = file.path(main.dir, "models", em_dir),
         user_recdevs = full_recdevs,
         bias_adjust = T,
         seed = seed
