@@ -42,7 +42,7 @@ index <- list(
     fleets = c(1, 3), 
     years = list(seq(1, 75, by = 1), seq(69, nyears, by = 1)),
     seas = list(7,1), 
-    sds_obs = list(0.2, 0.05),
+    sds_obs = list(0.2, 0.15),
     sds_out = list(0.13, sas[which(sas$N_years == nyears_fwd), "Resfish_index_CV"]) 
 )
 
@@ -62,6 +62,6 @@ ss3sim_base(
     om_dir = file.path(main.dir, "models", om_dir),
     em_dir = file.path(main.dir, "models", em_dir),
     user_recdevs = full_recdevs,
-    bias_adjust = F,
+    bias_adjust = T,
     seed = seed
 )
