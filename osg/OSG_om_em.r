@@ -5,13 +5,14 @@ library(dplyr)
 library(ss3sim) #be sure to use ss3.exe v3.30.19
 library(stringr)
 print(getwd())
+main.dir <- this.path::here(.. = 1)
 
 #get args from Bash environment (for OSG)
 args <- commandArgs(trailingOnly = TRUE)
 #should be 
 print(args) 
 
-set.seed <- read.csv("setseed.csv")
+set.seed <- read.csv("Inputs/setseed.csv")
 sas_full <- read.csv("Inputs/sas.csv")
 load("Inputs/constantF_mat.RData")
 # load("increaseF_mat.RData")
@@ -23,8 +24,8 @@ nyears_fwd <- 25
 scen <- "HRF_SQ"
 
 #Template OM and EM files
-om_dir <- paste0("opaka-om-", nyears_fwd) #, "-selex/" "-FRS-only"
-em_dir <- paste0("opaka-em-", nyears_fwd)
+om_dir <- paste0("opaka-om-", nyears_fwd, "-R0_trend") #, "-selex/" "-FRS-only"
+em_dir <- paste0("opaka-em-", nyears_fwd, "-R0_trend")
 
 #Get iteration number
 I <- as.numeric(tail(strsplit(args[1], "/")[[1]], n = 1))
@@ -42,7 +43,7 @@ index <- list(
     fleets = c(1, 3), 
     years = list(seq(1, 75, by = 1), seq(69, nyears, by = 1)),
     seas = list(7,1), 
-    sds_obs = list(0.2, 0.15),
+    sds_obs = list(0.2, sas[which(sas$N_years == nyears_fwd), "Resfish_sd_obs"]),
     sds_out = list(0.13, sas[which(sas$N_years == nyears_fwd), "Resfish_index_CV"]) 
 )
 
@@ -55,7 +56,7 @@ seed <- set.seed[I,2]
 
 ss3sim_base(
     iterations = I,
-    scenarios = "HRF_SQ_test_",  #paste(scen, nyears_fwd, "yrfwd", sep = "_"), 
+    scenarios = "HRF_R0_trend_",  #paste(scen, nyears_fwd, "yrfwd", sep = "_"), 
     f_params = F_list,
     index_params = index,
     lcomp_params = lcomp,

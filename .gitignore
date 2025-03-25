@@ -18,6 +18,8 @@
 !models/opaka-em-25/*
 !models/opaka-om-50/*
 !models/opaka-em-50/*
+!models/opaka-em-25-R0_trend/*
+!models/opaka-om-25-R0_trend/*
 !bin/*
 !*/*data.ss
 !*/*data_boot*.ss

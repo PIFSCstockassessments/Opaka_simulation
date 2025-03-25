@@ -197,13 +197,13 @@ load(file.path(main.dir, "Inputs", "increaseF_mat.RData"))
 
 library(fs)
 
-scen <- "HRF_SQ"
+scen <- "LRF_poorrec"
 nyears_fwd <- 25
 niter <- 100
 scen_dirs <- file.path(main.dir, paste(scen, nyears_fwd, "yrfwd", sep = "_"), 1:niter)
 sapply(scen_dirs, dir.create, recursive = T)
 file.copy(from = file.path(main.dir, "Inputs", "recdevs_mat.RData"), file.path(scen_dirs, "recdevs_mat.RData"))
-#file.copy(from = file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"), file.path(scen_dirs, "poor_recdevs_mat.RData"))
+file.copy(from = file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"), file.path(scen_dirs, "poor_recdevs_mat.RData"))
 file.copy(from = file.path(main.dir, "Inputs", "setseed.csv"), file.path(scen_dirs, "setseed.csv"))
 file.copy(from = file.path(main.dir, "Inputs", "sas.csv"), file.path(scen_dirs, "sas.csv"))
 file.copy(from = file.path(main.dir, "Inputs", "constantF_mat.RData"), file.path(scen_dirs, "constantF_mat.RData"))
@@ -256,14 +256,183 @@ for(i in 1:length(all_scenario_names)){
 
 get_results_all(
     overwrite_files = T,
-    user_scenarios =  all_scenario_names[c(1,2,7,8)],
+    user_scenarios =  all_scenario_names[c(1,2,3,7)],
     filename_prefix = "FRS_HRF_scens"
 )   
 get_fits_all(
     overwrite_files = T,
-    user_scenarios = all_scenario_names[c(1,2,7,8)], #all_scenario_names,
+    user_scenarios = all_scenario_names[c(1,2,3,7)], #all_scenario_names,
     filename_prefix = "FRS_HRF_scens"
 )
+
+```
+
+
+### troubleshooting 
+
+```{r}
+library(gghighlight)
+
+
+reps <- SSgetoutput(dirvec = c(
+file.path(main.dir, "LRF_poorrec_25_yrfwd", "2", "om"),
+file.path(main.dir, "LRF_poorrec_25_yrfwd", "2", "em")
+))
+reps_sum <- SSsummarize(reps)
+SSplotComparisons(reps_sum, models = c(1,2), legendlabels = c("om", "em"))
+SS_plots(reps$replist2)
+
+
+std_df <- reps$replist2$timeseries %>%
+select(Yr, SpawnBio, Recruit_0, 'obs_cat:_1', 'obs_cat:_2') %>%
+ rename(
+      Comm_catch = `obs_cat:_1`,
+      Noncomm_catch = `obs_cat:_2`
+    ) %>%
+     pivot_longer(
+      cols = c(SpawnBio:Noncomm_catch),
+      names_to = "name",
+      values_to = "value"
+    ) %>% 
+    filter(Yr > 0) %>%
+    group_by(name) %>%
+    mutate(value_standardized = (value /mean(value)) ) %>%
+    ungroup()
+
+std_df <- reps$replist2$cpue %>% 
+select(Yr, Fleet, Obs) %>%
+mutate(name = recode(Fleet,  `1` = "Comm_cpue",
+                      `3` = "BFISH_cpue"),
+       value = Obs) %>%
+    select(Yr, name, value) %>%
+    group_by(name) %>%
+    mutate(value_standardized = (value /mean(value)) ) %>%
+    ungroup() %>% 
+    bind_rows(std_df)
+
+## calculate mean length 
+  dbase <- reps$replist2[["lendbase"]] 
+  seas <- "comb"
+  type <- "len"
+  partitions <- sort(unique(dbase[["Part"]])) # values are 0, 1, or 2
+    partition.labels <- c("whole", "discarded", "retained")[partitions + 1]
+    partition.labels <- paste0("(", paste(partition.labels, collapse = "&"), " catch)")
+    # indx is string combining fleet, year, and potentially conditional bin
+    indx <- paste(dbase[["Fleet"]], dbase[["Yr"]], if (type == "con") {
+      dbase$"Lbin_lo"
+    } else {
+      ""
+    }, if (seas == "sep") dbase[["Seas"]] else "")
+    sex.flag <- type != "con" & max(tapply(
+      dbase$"Sexes",
+      dbase[["Fleet"]], function(x) length(unique(x))
+    )) > 1
+    if (sex.flag) {
+      indx <- paste(indx, dbase$"Sexes")
+    }
+    method.flag <- type == "size" && length(unique(dbase[["method"]])) > 1
+    if (method.flag) {
+      indx <- paste(indx, dbase[["method"]])
+    }
+    # unique strings in indx vector
+    uindx <- unique(indx)
+# create empty data.frame to store information on each observation
+    pldat <- matrix(0, length(uindx), 10,
+      dimnames = list(
+        uindx,
+        c(
+          "Obsmn", "Obslo", "Obshi", "semn", "Expmn", "Std.res",
+          "ObsloAdj", "ObshiAdj", "Fleet", "Yr"
+        )
+      )
+    )
+    # Find the weighting factor for this combination of factors
+    for (i in seq_along(uindx)) { # each row of pldat is an individual comp
+      subdbase <- dbase[indx == uindx[i], ]
+      xvar <- subdbase[["Bin"]]
+      # observed mean
+      pldat[i, "Obsmn"] <- sum(subdbase[["Obs"]] * xvar) / sum(subdbase[["Obs"]])
+      # expected mean
+      pldat[i, "Expmn"] <- sum(subdbase[["Exp"]] * xvar) / sum(subdbase[["Exp"]])
+
+      # use adjusted input sample size for Francis or MI weighting options
+      Nsamp <- subdbase[["Nsamp_adj"]]
+      if ("Nsamp_DM" %in% names(subdbase) || any(is.na(subdbase[["Nsamp_DM"]]))) {
+        # dirichlet multinomial newer format
+        Nsamp <- subdbase[["Nsamp_DM"]]
+      }
+
+      # standard error of the mean
+      pldat[i, "semn"] <- sqrt((sum(subdbase[["Exp"]] * xvar^2) / sum(subdbase[["Exp"]]) -
+        pldat[i, "Expmn"]^2) / mean(Nsamp))
+      # calculate confidence intervals and other stuff
+      pldat[i, "Obslo"] <- pldat[i, "Obsmn"] - 2 * pldat[i, "semn"]
+      pldat[i, "Obshi"] <- pldat[i, "Obsmn"] + 2 * pldat[i, "semn"]
+      pldat[i, "Std.res"] <- (pldat[i, "Obsmn"] - pldat[i, "Expmn"]) / pldat[i, "semn"]
+      pldat[i, "Fleet"] <- mean(subdbase[["Fleet"]])
+      pldat[i, "Yr"] <- mean(if (seas == "comb") subdbase[["Yr"]] else subdbase[["Yr.S"]])
+      if (type == "con") pldat[i, "Lbin"] <- mean(subdbase$"Lbin_lo")
+      if (sex.flag) {
+        pldat[i, "sexes"] <- mean(subdbase$"Sexes")
+      }
+      if (type == "size") {
+        pldat[i, "method"] <- mean(subdbase[["method"]])
+        plunits[i] <- subdbase[["units"]][1] # units of size comps
+      }
+    }
+    Nmult <- 1 / var(pldat[, "Std.res"], na.rm = TRUE)
+
+    # Find the adjusted confidence intervals
+    for (i in seq_along(uindx)) {
+      pldat[i, "ObsloAdj"] <- pldat[i, "Obsmn"] - 2 * pldat[i, "semn"] / sqrt(Nmult)
+      pldat[i, "ObshiAdj"] <- pldat[i, "Obsmn"] + 2 * pldat[i, "semn"] / sqrt(Nmult)
+    }
+
+std_df <- pldat %>%
+as.data.frame() %>%
+mutate(name = "BFISH_mean_length",
+value = Obsmn) %>% 
+select(Yr, name, value) %>%
+mutate(value_standardized = (value /mean(value)) ) %>%
+bind_rows(std_df)
+
+std_df %>% 
+ggplot(aes(x = Yr, y = value_standardized, group = name, color = name)) +
+geom_point() + 
+geom_line() +
+theme_bw()
+
+std_df %>% 
+ggplot(aes(x = Yr, y = value_standardized, group = name, color = name)) +
+geom_point() + 
+geom_line() +
+gghighlight(str_detect(name, "SpawnBio|BF")) +
+theme_bw()
+
+std_df %>% 
+ggplot(aes(x = Yr, y = value_standardized, group = name, color = name)) +
+geom_point() + 
+geom_line() +
+gghighlight(str_detect(name, "SpawnBio|cpue")) +
+theme_bw()
+
+
+std_df %>% 
+ggplot(aes(x = Yr, y = value_standardized, group = name, color = name)) +
+geom_point() + 
+geom_line() +
+gghighlight(str_detect(name, "SpawnBio|catch")) +
+theme_bw()
+
+
+reps_sum$SpawnBio %>% 
+filter(Yr > 0) %>%
+mutate(re = (replist2 - replist1)/replist1) %>%
+ggplot(aes(x = Yr, y = re)) +
+geom_line() +
+geom_hline(yintercept = 0) +
+theme_bw()
+
 
 ```
 
@@ -272,16 +441,13 @@ get_fits_all(
 
 ```{r}
 
-rep <- SS_output(file.path(main.dir, "SQ_0_yrfwd", "1", "em"))
+rep <- SS_output(file.path(main.dir, "models", "opaka-om-25-R0_trend"))
 SS_plots(rep)
 reps <- SSgetoutput(dirvec = c(
-file.path(main.dir, "HRF_SQ_test_", "1", "om"),
-file.path(main.dir, "HRF_SQ_test_", "1", "em")
+file.path(main.dir, "HRF_R0_trend_", "1", "om"),
+file.path(main.dir, "HRF_R0_trend_", "1", "em")
 ))
 
-rep_1 <- SS_output(dir = dir, covar = FALSE, verbose = FALSE,
-    forecast = forecastTF, warn = FALSE,
-    readwt = FALSE, printstats = FALSE, NoCompOK = TRUE)
 reps <- SSgetoutput(dirvec = c(
 file.path(main.dir, "HRF_SQ_25_yrfwd", "2", "om"),
 file.path(main.dir, "HRF_SQ_25_yrfwd", "2", "em"),
@@ -290,9 +456,9 @@ file.path(main.dir, "HRF_poorrec_25_yrfwd", "2", "em")
 ))
 
 reps_sum <- SSsummarize(reps)
-SSplotComparisons(reps_sum, legendlabels = c("SQ_om", "SQ_em", "PR_om", "PR_em"))
-SSplotComparisons(reps_sum, models = c(1,2), legendlabels = c("om", "em"), uncertainty = F)
-SS_plots(reps$replist4)
+SSplotComparisons(reps_sum, legendlabels = c("HRF_om", "HRF_em", "LRF_om", "LRF_em"))
+SSplotComparisons(reps_sum, models = c(1,2), legendlabels = c("om", "em"))
+SS_plots(reps$replist1)
 SS_plots(reps$replist2)
 SS_plots(reps$replist3)
 

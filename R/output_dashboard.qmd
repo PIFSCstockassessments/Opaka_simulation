@@ -163,11 +163,11 @@ theme_bw()
 
 ##  
 ```{r}
-#| eval: false
+
 index_df %>% 
 filter(model_run == "em" & Fleet == 3) %>% 
 filter(iteration == 1) %>%
-filter(str_detect(scenario, "HRF")) %>%
+filter(str_detect(scenario, "HRF|LRF")) %>%
 filter(str_detect(scenario, "Selex", negate=T)) %>% 
 ggplot(aes(x = year)) + 
 geom_point(aes(y = Obs, group = scenario, color = scenario)) +
@@ -177,9 +177,9 @@ theme_bw()
 ```
 
 ```{r}
-#| eval: false
+
 index_df %>% 
-filter(Fleet == 3 & iteration == 1 & str_detect(scenario, "HRF")) %>%
+filter(Fleet == 3 & iteration == 1) %>%
 ggplot(aes(x = year)) + 
 geom_vline(xintercept = 75, color = "grey60") +
 geom_line(data = . %>% filter(model_run == "om"), aes(y = Exp), color = "blue", linetype = 2) +
@@ -191,10 +191,10 @@ labs(x = "Year", y = "Index of Abundance")
 ```
 
 ```{r}
-#| eval: false
+
 lencomp_df %>% 
-#filter(str_detect(scenario, "FRS_only", negate = T)) %>% 
-filter(str_detect(scenario, "HRF_SQ") & iteration == 1) %>%
+filter(str_detect(scenario, "FRS_only", negate = T) & iteration == 1) %>% 
+#filter(str_detect(scenario, "HRF_SQ") & iteration == 1) %>%
 ggplot(aes(x = Bin)) + 
 geom_ribbon(data = . %>% filter(model_run == "om"), aes(ymin = 0, ymax = Exp, fill = scenario), alpha = .35) +
 geom_line(data = . %>% filter(model_run == "em"), aes(y = Obs, color = scenario), linetype = 2) +
@@ -204,6 +204,26 @@ labs(x = "Length", y = "Proportion", caption = "Actual (OM, shaded area), observ
 theme_bw()
 
 ```
+
+##
+
+```{r}
+ts_re %>% 
+group_by(scenario, year) %>% 
+filter(year > 1) %>%
+summarise(med_re = quantile(rec_dev_re, .5),
+uci = quantile(rec_dev_re, .95),
+lci = quantile(rec_dev_re, .05)) %>% 
+ggplot() +
+geom_hline(yintercept = 0, color = "grey60") +
+geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scenario), alpha = .5) + 
+geom_line(aes(x = year, y = med_re, color = scenario), linewidth = 1.2) +
+facet_wrap(~scenario) + 
+labs(x = "Year", y = "Rec Dev MRE") + 
+theme_bw()
+
+```
+
 ```{r}
 #| eval: false
 #| label: boxplots
@@ -252,17 +272,17 @@ facet_wrap(~scenario, scales = "free_x") +
 ylim(-.5, .5) +
 theme_classic()
 
-# index_df %>%
-# filter(model_run == "em" & Fleet_name == "ResFish") %>%
-# ggplot(aes(x = year, y = residuals)) + 
-# geom_hline(yintercept = 0, linetype = 2, color = "grey50") +
-# geom_boxplot(aes(x = year, y = residuals, group = year)) +
-# # geom_segment(aes(x = year, y = 0, yend = residuals)) +
-# #geom_point(aes(color = scenario), alpha = .5) + 
-# geom_smooth(aes(group = scenario, color = scenario)) +
-# facet_wrap(~scenario, scales = "free_x") + 
-# ylim(-.5, .5) +
-# theme_classic()
+index_df %>%
+filter(model_run == "em" & Fleet_name == "ResFish") %>%
+ggplot(aes(x = year, y = residuals)) + 
+geom_hline(yintercept = 0, linetype = 2, color = "grey50") +
+geom_boxplot(aes(x = year, y = residuals, group = year)) +
+# geom_segment(aes(x = year, y = 0, yend = residuals)) +
+#geom_point(aes(color = scenario), alpha = .5) + 
+geom_smooth(aes(group = scenario, color = scenario)) +
+facet_wrap(~scenario, scales = "free_x") + 
+ylim(-.5, .5) +
+theme_classic()
 ```
 
 ```{r}
