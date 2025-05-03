@@ -104,25 +104,25 @@
 0  # 0/1 to use steepness in initial equ recruitment calculation
 0  #  future feature:  0/1 to make realized sigmaR a function of SR curvature
 #_          LO            HI          INIT         PRIOR         PR_SD       PR_type      PHASE    env-var    use_dev   dev_mnyr   dev_mxyr     dev_PH      Block    Blk_Fxn #  parm_name
-             3             7           5.4             0             0             0          1          0          0          0          0          0          0          0 # SR_LN(R0)
+             5           5.5          5.4             0             0             0          1          0          0          0          0          0          0          0 # SR_LN(R0)
            0.2             1          0.76             0             0             0         -2          0          0          0          0          0          0          0 # SR_BH_steep
-             0             2          0.35             0             0             0         -4          0          0          0          0          0          0          0 # SR_sigmaR
+             0             2          0.657             0             0             0         -4          0          0          0          0          0          0          0 # SR_sigmaR
             -5             5             0             0             0             0         -4          0          0          0          0          0          0          0 # SR_regime
              0             0             0             0             0             0        -99          0          0          0          0          0          0          0 # SR_autocorr
 #_no timevary SR parameters
-2 #do_recdev:  0=none; 1=devvector (R=F(SSB)+dev); 2=deviations (R=F(SSB)+dev); 3=deviations (R=R0*dev; dev2=R-f(SSB)); 4=like 3 with sum(dev2) adding penalty
+3 #do_recdev:  0=none; 1=devvector (R=F(SSB)+dev); 2=deviations (R=F(SSB)+dev); 3=deviations (R=R0*dev; dev2=R-f(SSB)); 4=like 3 with sum(dev2) adding penalty
 69 # first year of main recr_devs; early devs can preceed this era
-100 # last year of main recr_devs; forecast devs start in following year
+97 # last year of main recr_devs; forecast devs start in following year
 2 #_recdev phase 
 1 # (0/1) to read 13 advanced options
- 26 #_recdev_early_start (0=none; neg value makes relative to recdev_start)
+ 1 #_recdev_early_start (0=none; neg value makes relative to recdev_start)
  4 #_recdev_early_phase
- 0 #_forecast_recruitment phase (incl. late recr) (0 value resets to maxphase+1)
+ 4 #_forecast_recruitment phase (incl. late recr) (0 value resets to maxphase+1)
  1 #_lambda for Fcast_recr_like occurring before endyr+1
 1000   #_last_early_yr_nobias_adj_in_MPD 
 27   #_first_yr_fullbias_adj_in_MPD 
-100   #_last_yr_fullbias_adj_in_MPD 
-101   #_first_recent_yr_nobias_adj_in_MPD 
+97   #_last_yr_fullbias_adj_in_MPD 
+98   #_first_recent_yr_nobias_adj_in_MPD 
 0.9112  #_max_bias_adj_in_MPD (1.0 to mimic pre-2009 models) 
 0 #_period of cycles in recruitment (N parms read below)
  -5 #min rec_dev
@@ -170,8 +170,8 @@
 #
 #_Q_parms(if_any);Qunits_are_ln(q)
 #_          LO            HI          INIT         PRIOR         PR_SD       PR_type      PHASE    env-var    use_dev   dev_mnyr   dev_mxyr     dev_PH      Block    Blk_Fxn  #  parm_name
-            -5             0      -3.37779             0             0             0          1          0          0          0          0          0          0          0  #  LnQ_base_FRS(1)
-           -10             0      -5.64254             0             0             0          1          0          0          0          0          0          0          0  #  LnQ_base_ResFish
+            -5            -3      -3.37779             0             0             0          1          0          0          0          0          0          0          0  #  LnQ_base_FRS(1)
+            -6            -5      -5.64254             0             0             0          1          0          0          0          0          0          0          0  #  LnQ_base_ResFish
 #_no timevary Q parameters
 #
 #_size_selex_patterns
@@ -229,12 +229,12 @@
              0            60            40             0             0             0         -2          0          0          0          0          0          0          0  #  Size_inflection_Non_comm(2)
              0            40            11             0             0             0         -2          0          0          0          0          0          0          0  #  Size_95%width_Non_comm(2)
 # 3   ResFish LenSelex
-            10            50       20.5078            36             5             0          3          0          0          0          0          0          0          0  #  Size_DblN_peak_ResFish(3)
-            -7             7     -0.984332          -0.5             2             0          3          0          0          0          0          0          0          0  #  Size_DblN_top_logit_ResFish(3)
+            15            25       20.5078            36             5             0          3          0          0          0          0          0          0          0  #  Size_DblN_peak_ResFish(3)
+            -2             0     -0.984332          -0.5             2             0          3          0          0          0          0          0          0          0  #  Size_DblN_top_logit_ResFish(3)
             -5            10     -0.338084          1.75             5             0         -3          0          0          0          0          0          0          0  #  Size_DblN_ascend_se_ResFish(3)
-            -5            10       4.03929           0.1             2             0          3          0          0          0          0          0          0          0  #  Size_DblN_descend_se_ResFish(3)
+             2             6       4.03929           0.1             2             0          3          0          0          0          0          0          0          0  #  Size_DblN_descend_se_ResFish(3)
           -999            15          -999            -1             5             0        -99          0          0          0          0          0          0          0  #  Size_DblN_start_logit_ResFish(3)
-           -20            15      -1.78602             1             5             0          3          0          0          0          0          0          0          0  #  Size_DblN_end_logit_ResFish(3)
+            -5             0      -1.78602             1             5             0          3          0          0          0          0          0          0          0  #  Size_DblN_end_logit_ResFish(3)
 #_No_Dirichlet parameters
 #_no timevary selex parameters
 #

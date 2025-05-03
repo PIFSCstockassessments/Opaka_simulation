@@ -9,3 +9,4 @@ HRF_SQ,25,cf,60,0.15,0.1,normal
 HRF_poorrec,25,cf,60,0.15,0.1,poor
 IRF_Selex,25,cf,45,0.18,0.15,normal
 IRF_Selex_poorrec,25,cf,45,0.18,0.15,poor
+HRF_R0_trend,25,cf,60,0.15,0.1,normal

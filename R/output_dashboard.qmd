@@ -14,13 +14,14 @@ library(tidyverse)
 library(ss3sim)
 library(gghighlight)
 main.dir <- this.path::here(.. = 1)
+source(file.path(main.dir, "R", "mean_length_fun.r"))
 ```
 
 ```{r}
 #| echo: false
 # read in results from simulation runs
 
-files <- list.files(main.dir, pattern = "FRS_HRF_scens_", full.names = T)
+files <- list.files(main.dir, pattern = "hrf_poorrec", full.names = T)
 results.list <-  lapply(files, read.csv)
 
 #get index of list objects for each type of csv
@@ -66,7 +67,7 @@ ts_re <- calculate_re(results_ts)
 
 results_ts %>% 
 mutate(rec_scen = ifelse(str_detect(scenario, "SQ"), "SQ", "poorrec")) %>% 
-mutate(rec_scen = ifelse(str_detect(scenario, "FRS_only_25_yrfwd"), "SQ", rec_scen)) %>%
+#mutate(rec_scen = ifelse(str_detect(scenario, "FRS_only_25_yrfwd"), "SQ", rec_scen)) %>%
 filter(model_run == "om") %>% 
 filter(iteration < 51) %>%
 ggplot() +
@@ -76,6 +77,7 @@ facet_wrap(~iteration) +
 labs(subtitle = "Recruitment deviations in OMs for SQ and poor rec scenarios", x = "Year", y = "Recruitment Deviations")
 ```
 ```{r}
+
 results_ts %>% 
 mutate(rec_scen = ifelse(str_detect(scenario, "SQ"), "SQ", "poorrec")) %>% 
 mutate(rec_scen = ifelse(str_detect(scenario, "FRS_only_25_yrfwd"), "SQ", rec_scen)) %>%
@@ -88,21 +90,162 @@ facet_wrap(~iteration) +
 labs(subtitle = "Recruitment deviations in OMs for SQ and poor rec scenarios", x = "Year", y = "Recruitment Deviations")
 ```
 
+```{r}
+#| label: om_em_index_vals
+index_df %>% 
+filter(Fleet == 3 & iteration == 1) %>%
+separate(col = scenario, into = c("scenario", "Rec_scenario", "25", "Yrs"), sep = "_") %>% 
+ggplot(aes(x = year)) + 
+geom_vline(xintercept = 75, color = "grey60", linetype = 1) +
+geom_line(data = . %>% filter(model_run == "om"), 
+        aes(y = Exp, color = "Simulated", linetype = "Simulated")) +
+geom_point(data = . %>% filter(model_run == "em"), 
+            aes(y = Obs, color = "Observed", shape = "Observed"), size = 2) +
+geom_line(data = . %>% filter(model_run == "em"), 
+        aes(y = Exp, color = "Expected", linetype = "Expected")) +
+facet_grid(Rec_scenario ~ scenario) + 
+scale_color_manual(name = "Data types", 
+                    values = c("Simulated" = "blue", 
+                            "Observed" = "#1B9E77",
+                            "Expected" = "red")) +
+scale_linetype_manual(name = "Data types",
+                    values = c("Simulated" = 2, 
+                            "Observed" = 0,
+                            "Expected" = 1)) +
+scale_shape_manual(name = "Data types",
+                values = c("Simulated" = NA,
+                        "Observed" = 16, 
+                        "Expected" = NA)) +
+labs(x = "Year") +
+theme_bw() +
+guides(color = guide_legend(override.aes = list(
+        shape = c(NA, 16, NA),
+        linetype = c(2, 0, 1)
+        ))) +
+labs(x = "Year", y = "Index of Abundance", 
+title = "Comparison of OM generated data to fit data")
+```
+
+# Data Fits  
+
+##  
+```{r}
+
+index_df %>% 
+filter(model_run == "em" & Fleet == 3) %>% 
+filter(iteration == 1) %>%
+# filter(str_detect(scenario, "HRF")) %>%
+# filter(str_detect(scenario, "Selex", negate=T)) %>% 
+separate(col = scenario, into = c("scenario", "Rec_scenario", "25", "Yrs"), sep = "_") %>% 
+ggplot(aes(x = year)) + 
+geom_point(aes(y = Obs, group = Rec_scenario, color = Rec_scenario)) +
+geom_line(aes(y = Exp, group = Rec_scenario, color = Rec_scenario)) +
+facet_wrap(~scenario) + 
+labs(x = "Year", y = "Index of Abundance", 
+title = "BFISH Index Fit for One Iteration",
+caption = "Points are observed values, lines are expected") +
+theme_bw()
+```
+
+```{r}
+#| label: bfish_resids
+index_df <- index_df %>% 
+    mutate(run_ID = paste(scenario, iteration, sep = "_")) %>% 
+    filter(! run_ID %in% nonconverged_its$nonconverged_run) %>% 
+    mutate(residuals = log(Obs) - log(Exp))
+
+# index_df %>%
+# filter(model_run == "em" & Fleet_name == "Comm") %>%
+# separate(col = scenario, into = c("scenario", "Rec_scenario", "25", "Yrs"), sep = "_") %>% 
+# ggplot(aes(x = year, y = residuals)) + 
+# geom_hline(yintercept = 0, linetype = 2, color = "grey50") +
+# geom_boxplot(aes(x = year, y = residuals, group = year)) +
+# geom_smooth(aes(group = scenario, color = scenario)) +
+# facet_grid(scenario ~ Rec_scenario) +  
+# ylim(-.5, .5) +
+# theme_classic()
+
+index_df %>%
+filter(model_run == "em" & Fleet_name == "ResFish") %>%
+separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
+remove = F) %>% 
+ggplot(aes(x = year, y = residuals)) + 
+geom_hline(yintercept = 0, linetype = 2, color = "grey50") +
+geom_boxplot(aes(x = year, y = residuals, group = year)) + 
+geom_smooth(aes(group = scenario, color = scenario)) +
+facet_grid(scen ~ Rec_scenario) + 
+ylim(-.5, .5) +
+labs(x = "Year", y = "Residuals", title = "Residuals for BFISH Index Fits") +
+theme_bw()
+```
+
+## 
+
+```{r}
+
+lencomp_df %>% 
+filter(str_detect(scenario, "FRS_only", negate = T) & iteration == 1) %>% 
+#filter(str_detect(scenario, "HRF_SQ") & iteration == 1) %>%
+ggplot(aes(x = Bin)) + 
+geom_ribbon(data = . %>% filter(model_run == "em"), aes(ymin = 0, ymax = Obs, fill = scenario), alpha = .35) +
+# geom_line(data = . %>% filter(model_run == "em"), aes(y = Obs, color = scenario), linetype = 2) +
+geom_line(data = . %>% filter(model_run == "em"), aes(y = Exp, color = scenario)) +
+facet_wrap(~year) + 
+labs(x = "Length", y = "Proportion", caption = "Observed (shaded area), and expected (solid line) length compositions for 1 iteration of scenarios") +
+theme_bw()
+
+```
+
+```{r}
+#| label: mean_length
+#| cache: true
+
+mean_len_df <- mean_length(lencomp_df = lencomp_df)
+
+mean_len_df %>% 
+as.data.frame() %>%
+tibble::rownames_to_column(var = "index") %>%
+separate(col = index, into = c("flt", "yr", "model_run", "iteration", "scen"), 
+sep = " ") %>%
+separate(col = scen, into = c("scenario", "Rec_scenario", "25", "Yrs"), sep = "_", remove = F) %>%
+filter(model_run == "em") %>% 
+ggplot(aes(x = Yr)) +
+geom_boxplot(aes(y = Obsmn, group = Yr)) +
+geom_line(data = . %>% group_by(scenario, Rec_scenario, Yr) %>% summarise(med_exp = quantile(Expmn, .5)), aes(y = med_exp, color = scenario), linewidth = 1.5) + 
+facet_grid(scenario ~ Rec_scenario) +
+labs(x = "Year", y = "Mean Length at Age") +
+theme_bw()
+
+```
+
+
 # Outputs 
 
 ## 
 ```{r}
+n_iterations <- ts_re %>%
+group_by(scenario) %>% 
+summarise(n_iterations = n_distinct(iteration))
 
+n_iterations
+```
+
+```{r}
 ts_re %>%
+filter(year <= 100) %>%
 group_by(scenario, year) %>% 
 summarise(med_re = quantile(SpawnBio_re, .5),
 uci = quantile(SpawnBio_re, .95),
 lci = quantile(SpawnBio_re, .05)) %>% 
+separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
+remove = F) %>% 
 ggplot() +
 geom_hline(yintercept = 0, color = "grey60") +
-geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scenario), alpha = .5) + 
-geom_line(aes(x = year, y = med_re, color = scenario), linewidth = 1.2) +
-facet_wrap(~scenario) + 
+geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scen), alpha = .25) + 
+geom_line(aes(x = year, y = med_re, color = scen), linewidth = 1.2) +
+#geom_text(data = n_iterations, aes(label=paste0("n = ", n_iterations), 
+#x = 6, y=.24),size=5,vjust=-0.5) +
+facet_wrap(~ Rec_scenario) + 
 labs(x = "Year", y = "SSB MRE") + 
 theme_bw()
 ```
@@ -110,12 +253,14 @@ theme_bw()
 ```{r}
 ts_re %>%
 group_by(scenario, year) %>% 
-filter(iteration <= 10) %>% 
+filter(iteration == 10) %>% 
+separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
+remove = F) %>% 
 ggplot() +
 geom_hline(yintercept = 0, color = "grey60") +
 geom_line(aes(x = year, y = SpawnBio_om, color = scenario), linetype = 2) + 
 geom_line(aes(x = year, y = SpawnBio_em, color = scenario)) +
-facet_wrap(~iteration) + 
+facet_grid(scen ~ Rec_scenario) + 
 labs(x = "Year", y = "SSB") + 
 theme_bw()
 ```
@@ -124,6 +269,7 @@ theme_bw()
 ```{r}
 ts_re %>%
 group_by(scenario, year) %>% 
+filter(year < 101) %>%
 summarise(med_re = quantile(F_1_re, .5), uci = quantile(F_1_re, .95), lci = quantile(F_1_re, .05)) %>% 
 ggplot() +
 geom_hline(yintercept = 0, color = "grey60") +
@@ -137,8 +283,23 @@ theme_bw()
 
 ##  
 ```{r}
+#| eval: false
 ts_re %>%
 group_by(scenario, year) %>% 
+filter(year < 101) %>%
+summarise(med_re = quantile(SpawnBio_re, .5)) %>% 
+ggplot() +
+geom_hline(yintercept = 0, color = "grey60") +
+geom_line(aes(x = year, y = med_re, color = scenario), linewidth = 1.2) +
+gghighlight(str_detect(scenario, "SQ")) +
+labs(x = "Year", y = "SSB MRE") + 
+theme_bw()
+```
+```{r}
+#| eval: false
+ts_re %>%
+group_by(scenario, year) %>% 
+filter(year < 101) %>%
 summarise(med_re = quantile(SpawnBio_re, .5)) %>% 
 ggplot() +
 geom_hline(yintercept = 0, color = "grey60") +
@@ -146,74 +307,17 @@ geom_line(aes(x = year, y = med_re, color = scenario), linewidth = 1.2) +
 gghighlight(str_detect(scenario, "poorrec")) +
 labs(x = "Year", y = "SSB MRE") + 
 theme_bw()
-```
-```{r}
-ts_re %>%
-group_by(scenario, year) %>% 
-summarise(med_re = quantile(SpawnBio_re, .5)) %>% 
-ggplot() +
-geom_hline(yintercept = 0, color = "grey60") +
-geom_line(aes(x = year, y = med_re, color = scenario), linewidth = 1.2) +
-gghighlight(str_detect(scenario, "FRS_only_25_yrfwd|SQ")) +
-labs(x = "Year", y = "SSB MRE") + 
-theme_bw()
 
 
 ```
-
-##  
-```{r}
-
-index_df %>% 
-filter(model_run == "em" & Fleet == 3) %>% 
-filter(iteration == 1) %>%
-filter(str_detect(scenario, "HRF|LRF")) %>%
-filter(str_detect(scenario, "Selex", negate=T)) %>% 
-ggplot(aes(x = year)) + 
-geom_point(aes(y = Obs, group = scenario, color = scenario)) +
-geom_line(aes(y = Exp, group = scenario, color = scenario)) +
-labs(x = "Year", y = "Index of Abundance") +
-theme_bw()
-```
-
-```{r}
-
-index_df %>% 
-filter(Fleet == 3 & iteration == 1) %>%
-ggplot(aes(x = year)) + 
-geom_vline(xintercept = 75, color = "grey60") +
-geom_line(data = . %>% filter(model_run == "om"), aes(y = Exp), color = "blue", linetype = 2) +
-geom_point(data = . %>% filter(model_run == "em"), aes(y = Obs), color = "#1B9E77", size = 2) +
-geom_line(data = . %>% filter(model_run == "em"), aes(y = Exp), color = "red") +
-facet_wrap(~scenario) + 
-theme_bw() +
-labs(x = "Year", y = "Index of Abundance")
-```
-
-```{r}
-
-lencomp_df %>% 
-filter(str_detect(scenario, "FRS_only", negate = T) & iteration == 1) %>% 
-#filter(str_detect(scenario, "HRF_SQ") & iteration == 1) %>%
-ggplot(aes(x = Bin)) + 
-geom_ribbon(data = . %>% filter(model_run == "om"), aes(ymin = 0, ymax = Exp, fill = scenario), alpha = .35) +
-geom_line(data = . %>% filter(model_run == "em"), aes(y = Obs, color = scenario), linetype = 2) +
-geom_line(data = . %>% filter(model_run == "em"), aes(y = Exp, color = scenario)) +
-facet_wrap(~year) + 
-labs(x = "Length", y = "Proportion", caption = "Actual (OM, shaded area), observed (dashed line), and expected (solid line) length compositions for 1 iteration of HRF scenarios") +
-theme_bw()
-
-```
-
-##
 
 ```{r}
 ts_re %>% 
 group_by(scenario, year) %>% 
 filter(year > 1) %>%
-summarise(med_re = quantile(rec_dev_re, .5),
-uci = quantile(rec_dev_re, .95),
-lci = quantile(rec_dev_re, .05)) %>% 
+summarise(med_re = quantile(rec_dev_re, .5, na.rm = TRUE),
+uci = quantile(rec_dev_re, .95, na.rm = TRUE),
+lci = quantile(rec_dev_re, .05, na.rm = TRUE)) %>% 
 ggplot() +
 geom_hline(yintercept = 0, color = "grey60") +
 geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scenario), alpha = .5) + 
@@ -222,10 +326,24 @@ facet_wrap(~scenario) +
 labs(x = "Year", y = "Rec Dev MRE") + 
 theme_bw()
 
+ts_re %>% 
+group_by(scenario, year) %>% 
+filter(year > 1) %>%
+summarise(med_re = quantile(Recruit_0_re, .5, na.rm = TRUE),
+uci = quantile(Recruit_0_re, .95, na.rm = TRUE),
+lci = quantile(Recruit_0_re, .05, na.rm = TRUE)) %>% 
+ggplot() +
+geom_hline(yintercept = 0, color = "grey60") +
+geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scenario), alpha = .5) + 
+geom_line(aes(x = year, y = med_re, color = scenario), linewidth = 1.2) +
+facet_wrap(~scenario) + 
+labs(x = "Year", y = "Recruitment MRE") + 
+theme_bw()
+
 ```
 
 ```{r}
-#| eval: false
+
 #| label: boxplots
 ## plots for relative error of management specific values 
 
@@ -243,10 +361,12 @@ scalar_re %>%
 select(c(iteration, scenario, depletion_re, SR_LN_R0_re, SSB_MSY_re)) %>%
 pivot_longer(cols = c(depletion_re, SR_LN_R0_re, SSB_MSY_re)) %>% 
 ggplot() +
-geom_boxplot(aes(x = name, y = value, fill = scenario)) + 
+geom_boxplot(aes(x = scenario, y = value, fill = scenario)) + 
 geom_hline(yintercept = 0, color = "grey50", linetype = 2) +
+facet_wrap(~name, scales = "free_y") +
+scale_x_discrete(labels = NULL, breaks = NULL) +
 labs(x = "Management Quants", y = "RE") + 
-theme_classic()
+theme_bw()
 
 
 ```
@@ -254,6 +374,7 @@ theme_classic()
 # Diagnostics  
 ```{r}
 #| label: index
+#| eval: false
 index_df <- index_df %>% 
     mutate(run_ID = paste(scenario, iteration, sep = "_")) %>% 
     filter(! run_ID %in% nonconverged_its$nonconverged_run) %>% 

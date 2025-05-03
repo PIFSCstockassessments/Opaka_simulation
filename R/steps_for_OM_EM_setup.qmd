@@ -219,7 +219,7 @@ file.copy(from = file.path(main.dir, "Inputs", "sas.csv"), file.path(scen_dirs, 
 file.copy(from = file.path(main.dir, "Inputs", "constantF_mat.RData"), file.path(scen_dirs, "constantF_mat.RData"))
 
 for(i in 1:length(scen_dirs)){
-    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-om-", nyears_fwd, "-R0_trend")), scen_dirs[i]) #"-FRS-only" #, "-selex"
+    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-om-", nyears_fwd)), scen_dirs[i]) #"-FRS-only" #, "-selex" , "-R0_trend"
     fs::dir_copy(file.path(main.dir, "models", paste0("opaka-em-", nyears_fwd)), scen_dirs[i])
 }
 #only for FRS_only_poorrec_25_yrfwd scenario (testing hyperstablity)
@@ -245,17 +245,17 @@ shell(paste0("powershell cd ", main.dir, ";tar -czf upload.", scen, "_25_yrsfwd.
 
 ```{r}
 #get results out of models for comparisons
-all_scenario_names <- paste(sas_full$Scen_name, sas_full$N_years, "yrfwd", sep = "_")
+all_scenario_names <- paste(sas_full$Scen_name, sas_full$N_years, "yrfwd", sep = "_")[3:8]
 
 missing_vec <- c()
 for(i in 1:length(all_scenario_names)){
-    if(file.exists(file.path(main.dir, paste0("download.", sas_full$Scen_name[i], "_25_yrfwd.tar.gz ")))){
-            shell(paste0("powershell cd ", main.dir, ";tar -xzf download.", sas_full$Scen_name[i], "_25_yrfwd.tar.gz ", sas_full$Scen_name[i], "_25_yrfwd/"))
+    if(file.exists(file.path(main.dir, paste0("download.", all_scenario_names[i], ".tar.gz ")))){
+            shell(paste0("powershell cd ", main.dir, ";tar -xzf download.", all_scenario_names[i], ".tar.gz ", all_scenario_names[i]))
             for(y in 1:niter){
-                if(file.exists(file.path(main.dir, paste0(sas_full$Scen_name[i], "_25_yrfwd/"), y, "End.tar.gz"))){
-                    shell(paste0("powershell cd ", main.dir, "/", sas_full$Scen_name[i], "_25_yrfwd/", y, ";tar -xzf End.tar.gz"))
+                if(file.exists(file.path(main.dir, all_scenario_names[i], y, "End.tar.gz"))){
+                    shell(paste0("powershell cd ", main.dir, "/", all_scenario_names[i], "/", y, ";tar -xzf End.tar.gz"))
                 }else{
-                    missing_vec <- c(missing_vec, paste0(sas_full$Scen_name[i], "_25_yrfwd/", y))
+                    missing_vec <- c(missing_vec, paste0(all_scenario_names[i], y))
                 } 
             }
     }else{
@@ -266,13 +266,13 @@ for(i in 1:length(all_scenario_names)){
 
 get_results_all(
     overwrite_files = T,
-    user_scenarios =  all_scenario_names[c(3)],
-    filename_prefix = "LRF_SQ"
+    user_scenarios =  all_scenario_names[i],
+    filename_prefix = "hrf_poorrec"
 )   
 get_fits_all(
     overwrite_files = T,
-    user_scenarios = all_scenario_names[c(1,2,3,7)], #all_scenario_names,
-    filename_prefix = "FRS_HRF_scens"
+    user_scenarios = all_scenario_names,
+    filename_prefix = "all_scen"
 )
 
 ```
@@ -284,11 +284,11 @@ library(gghighlight)
 
 
 reps <- SSgetoutput(dirvec = c(
-file.path(main.dir, "LRF_poorrec_25_yrfwd", "2", "om"),
-file.path(main.dir, "LRF_poorrec_25_yrfwd", "2", "em")
+file.path(main.dir, "HRF_poorrec_25_yrfwd", "4", "om"),
+file.path(main.dir, "HRF_poorrec_25_yrfwd", "4", "em")
 ))
 reps_sum <- SSsummarize(reps)
-SSplotComparisons(reps_sum, models = c(1,2), legendlabels = c("om", "em"))
+SSplotComparisons(reps_sum, legendlabels = c("om", "em"))
 SS_plots(reps$replist2)
 
 
@@ -449,11 +449,14 @@ theme_bw()
 
 ```{r}
 
-rep <- SS_output(file.path(main.dir, "HRF_test/2_d/em"))
+rep <- SS_output(file.path(main.dir, "HRF_poorrec_perfectdata_25_yrfwd/9/em"))
 SS_plots(rep)
 reps <- SSgetoutput(dirvec = c(
-file.path(main.dir, "HRF_test", "10", "om"),
-file.path(main.dir, "HRF_test", "10", "em")
+file.path(main.dir, "HRF_poorrec_perfectdata_25_yrfwd", "1", "om"),
+file.path(main.dir, "HRF_poorrec_perfectdata_25_yrfwd", "1", "em"),
+file.path(main.dir, "HRF_poorrec_perfectdata_25_yrfwd", "10", "om"),
+file.path(main.dir, "HRF_poorrec_perfectdata_25_yrfwd", "10", "em")
+
 ))
 
 reps <- SSgetoutput(dirvec = c(
@@ -465,7 +468,7 @@ file.path(main.dir, "HRF_poorrec_25_yrfwd", "2", "om")
 
 reps_sum <- SSsummarize(reps)
 #SSplotComparisons(reps_sum, legendlabels = c("HRF_om", "HRF_em", "LRF_om", "LRF_em"))  print = TRUE, png = TRUE, plotdir = file.path(main.dir, "HRF_test", "2")
-SSplotComparisons(reps_sum, legendlabels = c("om", "em"))
+SSplotComparisons(reps_sum, legendlabels = c("om1", "em1", "om10", "em10"))
 SS_plots(reps$replist1)
 SS_plots(reps$replist2)
 SS_plots(reps$replist3)
