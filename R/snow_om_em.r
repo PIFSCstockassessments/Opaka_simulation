@@ -146,23 +146,3 @@ get_fits_all(
 # unlink(setdiff(list.files(em_path, full.names = T), file.path(em_path,files.keep)), recursive=TRUE)
 # unlink(setdiff(list.files(om_path, full.names = T), file.path(om_path,files.keep)), recursive=TRUE)
 
-devtools::install_github('Cole-Monnahan-NOAA/adnuts')
-library(adnuts)
-m<-"ss3"
-p<-file.path(main.dir, "SQ_0_yrfwd", "2", "em", "adnuts_model")
-#make sure to run model with -hbf before fitting
-fit_model <- adnuts::sample_nuts(model=m, path=p,  iter=1000, warmup=400, 
-          chains=3, cores=4,control=list(metric='mle', max_treedepth=5),mceval=TRUE)
-
-summary(fit_model)
-str(fit_model$monitor)
-summary(fit_model$monitor$n_eff)
-
-post <- extract_samples(fit_model)
-str(post)
-install.packages("shinystan")
-library(shinystan)
-launch_shinyadmb(fit_model)
-
-plot_marginals(fit_model)
-pairs_admb(fit_model)
