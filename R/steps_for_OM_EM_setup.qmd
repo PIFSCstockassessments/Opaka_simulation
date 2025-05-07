@@ -207,13 +207,13 @@ load(file.path(main.dir, "Inputs", "increaseF_mat.RData"))
 
 library(fs)
 
-scen <- "HRF_poorrec"
+scen <- "LRF_SQ"
 nyears_fwd <- 25
 niter <- 100
 scen_dirs <- file.path(main.dir, paste(scen, nyears_fwd, "yrfwd", sep = "_"), 1:niter)
 sapply(scen_dirs, dir.create, recursive = T)
 file.copy(from = file.path(main.dir, "Inputs", "recdevs_mat.RData"), file.path(scen_dirs, "recdevs_mat.RData"))
-file.copy(from = file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"), file.path(scen_dirs, "poor_recdevs_mat.RData"))
+#file.copy(from = file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"), file.path(scen_dirs, "poor_recdevs_mat.RData"))
 file.copy(from = file.path(main.dir, "Inputs", "setseed.csv"), file.path(scen_dirs, "setseed.csv"))
 file.copy(from = file.path(main.dir, "Inputs", "sas.csv"), file.path(scen_dirs, "sas.csv"))
 file.copy(from = file.path(main.dir, "Inputs", "constantF_mat.RData"), file.path(scen_dirs, "constantF_mat.RData"))
@@ -245,7 +245,7 @@ shell(paste0("powershell cd ", main.dir, ";tar -czf upload.", scen, "_25_yrsfwd.
 
 ```{r}
 #get results out of models for comparisons
-all_scenario_names <- paste(sas_full$Scen_name, sas_full$N_years, "yrfwd", sep = "_")[3:8]
+all_scenario_names <- paste(sas_full$Scen_name, sas_full$N_years, "yrfwd", sep = "_")[1:8]
 
 missing_vec <- c()
 for(i in 1:length(all_scenario_names)){
@@ -266,8 +266,8 @@ for(i in 1:length(all_scenario_names)){
 
 get_results_all(
     overwrite_files = T,
-    user_scenarios =  all_scenario_names[i],
-    filename_prefix = "hrf_poorrec"
+    user_scenarios =  all_scenario_names,
+    filename_prefix = "all_scen"
 )   
 get_fits_all(
     overwrite_files = T,
@@ -284,13 +284,18 @@ library(gghighlight)
 
 
 reps <- SSgetoutput(dirvec = c(
-file.path(main.dir, "HRF_poorrec_25_yrfwd", "4", "om"),
-file.path(main.dir, "HRF_poorrec_25_yrfwd", "4", "em")
+file.path(main.dir, "HRF_SQ_25_yrfwd", "10", "om"),
+file.path(main.dir, "HRF_SQ_25_yrfwd", "10", "em")
+# file.path(main.dir, "HRF_SQ_25_yrfwd", "10", "om"),
+# file.path(main.dir, "HRF_SQ_25_yrfwd", "10", "em")
 ))
 reps_sum <- SSsummarize(reps)
-SSplotComparisons(reps_sum, legendlabels = c("om", "em"))
+SSplotComparisons(reps_sum)
+SSplotComparisons(reps_sum, legendlabels = c("prOM", "prEM"),  models = c(1,2), uncertainty = F)
 SS_plots(reps$replist2)
 
+reps_sum$SpawnBio %>% mutate(mre = (replist2 - replist1)/replist1) %>%
+ggplot(aes(x = Yr, y = mre)) + geom_line() + geom_hline(yintercept = 0)
 
 std_df <- reps$replist2$timeseries %>%
 select(Yr, SpawnBio, Recruit_0, 'obs_cat:_1', 'obs_cat:_2') %>%

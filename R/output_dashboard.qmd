@@ -21,8 +21,17 @@ source(file.path(main.dir, "R", "mean_length_fun.r"))
 #| echo: false
 # read in results from simulation runs
 
-files <- list.files(main.dir, pattern = "hrf_poorrec", full.names = T)
+files <- list.files(main.dir, pattern = "all_scen", full.names = T)
 results.list <-  lapply(files, read.csv)
+
+# rename FRS scenarios to match the naming convention of others
+results.list <- lapply(results.list, function(df){
+    if("scenario" %in% colnames(df)){
+        df$scenario <- gsub("FRS_only_25_yrfwd", "FRSonly_SQ_25_yrfwd", df$scenario)
+        df$scenario <- gsub("FRS_only_poorrec_25_yrfwd", "FRSonly_poorrec_25_yrfwd", df$scenario)
+    }
+    return(df)
+})
 
 #get index of list objects for each type of csv
 scalar.ind <- grep(pattern = "scalar.csv", x = files)
@@ -66,8 +75,8 @@ ts_re <- calculate_re(results_ts)
 ```{r}
 
 results_ts %>% 
-mutate(rec_scen = ifelse(str_detect(scenario, "SQ"), "SQ", "poorrec")) %>% 
-#mutate(rec_scen = ifelse(str_detect(scenario, "FRS_only_25_yrfwd"), "SQ", rec_scen)) %>%
+mutate(rec_scen = ifelse(str_detect(scenario, "poorrec"), "poorrec", "SQ")) %>% 
+#mutate(rec_scen = ifelse(str_detect(scenario, "FRS_only_25_yrfwd"), "SQ", rec_scen)) %>% 
 filter(model_run == "om") %>% 
 filter(iteration < 51) %>%
 ggplot() +
@@ -79,8 +88,8 @@ labs(subtitle = "Recruitment deviations in OMs for SQ and poor rec scenarios", x
 ```{r}
 
 results_ts %>% 
-mutate(rec_scen = ifelse(str_detect(scenario, "SQ"), "SQ", "poorrec")) %>% 
-mutate(rec_scen = ifelse(str_detect(scenario, "FRS_only_25_yrfwd"), "SQ", rec_scen)) %>%
+mutate(rec_scen = ifelse(str_detect(scenario, "poorrec"), "poorrec", "SQ")) %>% 
+#mutate(rec_scen = ifelse(str_detect(scenario, "FRS_only_25_yrfwd"), "SQ", rec_scen)) %>% 
 filter(model_run == "om") %>% 
 filter(iteration > 50) %>%
 ggplot() +
@@ -184,7 +193,7 @@ theme_bw()
 ```{r}
 
 lencomp_df %>% 
-filter(str_detect(scenario, "FRS_only", negate = T) & iteration == 1) %>% 
+filter(str_detect(scenario, "FRSonly", negate = T) & iteration == 1) %>% 
 #filter(str_detect(scenario, "HRF_SQ") & iteration == 1) %>%
 ggplot(aes(x = Bin)) + 
 geom_ribbon(data = . %>% filter(model_run == "em"), aes(ymin = 0, ymax = Obs, fill = scenario), alpha = .35) +
@@ -208,6 +217,7 @@ tibble::rownames_to_column(var = "index") %>%
 separate(col = index, into = c("flt", "yr", "model_run", "iteration", "scen"), 
 sep = " ") %>%
 separate(col = scen, into = c("scenario", "Rec_scenario", "25", "Yrs"), sep = "_", remove = F) %>%
+filter(str_detect(scenario, "FRSonly", negate = T)) %>% 
 filter(model_run == "em") %>% 
 ggplot(aes(x = Yr)) +
 geom_boxplot(aes(y = Obsmn, group = Yr)) +
