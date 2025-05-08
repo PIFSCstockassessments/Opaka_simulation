@@ -280,12 +280,16 @@ theme_bw()
 ts_re %>%
 group_by(scenario, year) %>% 
 filter(year < 101) %>%
-summarise(med_re = quantile(F_1_re, .5), uci = quantile(F_1_re, .95), lci = quantile(F_1_re, .05)) %>% 
+summarise(med_re = quantile(F_1_re, .5), 
+uci = quantile(F_1_re, .95), 
+lci = quantile(F_1_re, .05)) %>% 
+separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
+remove = F) %>% 
 ggplot() +
 geom_hline(yintercept = 0, color = "grey60") +
-geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scenario), alpha = .5) + 
-geom_line(aes(x = year, y = med_re, color = scenario), linewidth = 1.2) +
-facet_wrap(~scenario) + 
+geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scen), alpha = .25) + 
+geom_line(aes(x = year, y = med_re, color = scen), linewidth = 1.2) +
+facet_wrap(~Rec_scenario) + 
 labs(x = "Year", y = "F MRE") + 
 theme_bw()
 
@@ -328,11 +332,13 @@ filter(year > 1) %>%
 summarise(med_re = quantile(rec_dev_re, .5, na.rm = TRUE),
 uci = quantile(rec_dev_re, .95, na.rm = TRUE),
 lci = quantile(rec_dev_re, .05, na.rm = TRUE)) %>% 
+separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
+remove = F) %>% 
 ggplot() +
 geom_hline(yintercept = 0, color = "grey60") +
-geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scenario), alpha = .5) + 
-geom_line(aes(x = year, y = med_re, color = scenario), linewidth = 1.2) +
-facet_wrap(~scenario) + 
+geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scen), alpha = .25) + 
+geom_line(aes(x = year, y = med_re, color = scen), linewidth = 1.2) +
+facet_wrap(~Rec_scenario) + 
 labs(x = "Year", y = "Rec Dev MRE") + 
 theme_bw()
 
@@ -342,11 +348,13 @@ filter(year > 1) %>%
 summarise(med_re = quantile(Recruit_0_re, .5, na.rm = TRUE),
 uci = quantile(Recruit_0_re, .95, na.rm = TRUE),
 lci = quantile(Recruit_0_re, .05, na.rm = TRUE)) %>% 
+separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
+remove = F) %>% 
 ggplot() +
 geom_hline(yintercept = 0, color = "grey60") +
-geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scenario), alpha = .5) + 
-geom_line(aes(x = year, y = med_re, color = scenario), linewidth = 1.2) +
-facet_wrap(~scenario) + 
+geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scen), alpha = .25) + 
+geom_line(aes(x = year, y = med_re, color = scen), linewidth = 1.2) +
+facet_wrap(~Rec_scenario) + 
 labs(x = "Year", y = "Recruitment MRE") + 
 theme_bw()
 
@@ -367,17 +375,40 @@ scalar_re <- calculate_re(results_scalar)
 ## quantities to keep track of 
 ### depletion_re, F_MSY_re, SR_LN_R0_re, SSB_MSY_re, Totbio_Unfished_re
 
-scalar_re %>% 
-select(c(iteration, scenario, depletion_re, SR_LN_R0_re, SSB_MSY_re)) %>%
-pivot_longer(cols = c(depletion_re, SR_LN_R0_re, SSB_MSY_re)) %>% 
+# scalar_re %>% 
+# select(c(iteration, scenario, depletion_re, SR_LN_R0_re, SSB_MSY_re, F_MSY_re)) %>%
+# pivot_longer(cols = c(depletion_re, SR_LN_R0_re, SSB_MSY_re, F_MSY_re)) %>% 
+# ggplot() +
+# geom_boxplot(aes(x = scenario, y = value, fill = scenario)) + 
+# geom_hline(yintercept = 0, color = "grey50", linetype = 2) +
+# facet_wrap(~name, scales = "free_y") +
+# scale_x_discrete(labels = NULL, breaks = NULL) +
+# labs(x = "Management Quants", y = "RE") + 
+# theme_bw()
+
+ref_pt_df <- scalar_df %>% select(scenario, iteration, model_run, SSB_MSY, F_MSY) 
+ref_pt_df <- ts_df %>% 
+filter(year == 100) %>% 
+select(scenario, iteration, model_run, SpawnBio, F_1, F_2) %>% 
+left_join(ref_pt_df, by = c("scenario", "iteration", "model_run")) %>% 
+mutate(annual_F = round(F_1 + F_2, 3),
+       bmsst = SSB_MSY*.865,
+       ssb_ssbmsst = SpawnBio/bmsst,
+       F_Fmsy = annual_F/F_MSY) %>% 
+select(-c(F_1, F_2)) 
+
+ref_pt_re <- calculate_re(ref_pt_df)
+
+ref_pt_re %>% 
+select(c(iteration, scenario, SpawnBio_re, bmsst_re, ssb_ssbmsst_re, annual_F_re, F_MSY_re, F_Fmsy_re)) %>%
+pivot_longer(cols = c(SpawnBio_re, bmsst_re, ssb_ssbmsst_re, annual_F_re, F_MSY_re, F_Fmsy_re)) %>% 
 ggplot() +
 geom_boxplot(aes(x = scenario, y = value, fill = scenario)) + 
 geom_hline(yintercept = 0, color = "grey50", linetype = 2) +
 facet_wrap(~name, scales = "free_y") +
 scale_x_discrete(labels = NULL, breaks = NULL) +
-labs(x = "Management Quants", y = "RE") + 
+labs(x = "Reference Points", y = "RE") + 
 theme_bw()
-
 
 ```
 
@@ -418,6 +449,7 @@ theme_classic()
 
 ```{r}
 #| label: runstest
+#| eval: false
 ## runstest 
 runs_list <- index_df |> filter(model_run == "em") |> mutate(resid = log(Obs) - log(Exp)) |> group_by(scenario, iteration, Fleet) |> group_map(~randtests::runs.test(.x$resid, alternative = "left.sided"))
 
