@@ -20,14 +20,13 @@ rep <- SS_output(dir = file.path(main.dir, "models", "03-simplified-mod"))
 
 ### Create rec dev timeseries
 
-I generated a time series of recruitment deviations that result in a 40% decline in average recruitment. To do this, I first calculated the expected recruitment based on the stock-recruitment curve for the first 75 years (solid yellow line). I found the average of that (dotted yellow line) and what a 40% decrease would be. From there, I created a vector of values that decline from the last year of recruitment to the new average recruitment, with variability. Below is example code for one timeseries.
+I generated a time series of recruitment deviations that result in a 40% decline in average recruitment. To do this, I first calculated the expected recruitment based on the stock-recruitment curve for the first 75 years (solid yellow line). I found the average of that (dotted yellow line) and what a 40% decrease would be. From there, I created a vector of the rate of decline over 10 years to reach the 40% reduced level and then the reduced multiplier. I iteratively tested to find the true value of the decline multiplier that leads to a 40% decline in mean expected recruitment.
 
 ```{r}
 recdevs_df <- rep$parameters %>% 
 filter(str_detect(Label, "Rec")) %>% 
 select(c(Label, Value)) %>% 
 separate(col = Label, sep = "_", into = c("period", "recdev", "year")) 
-
 
 ssb <- rep$derived_quants %>% 
 filter(str_detect(Label, "SSB")) %>%
@@ -45,33 +44,99 @@ select(Year, Value) %>%
 rename("Rec" = "Value") %>% 
 mutate("SSB" = ssb, 
 "SR_rec" = (SSB*4*.76*180.859)/(1466.7*(1-.76)+SSB*(5*.76-1)),
-"Calc_rec" = SR_rec*exp(c(0,recdevs_df$Value)), 
+"Calc_rec" = SR_rec*exp(c(0,recdevs_df$Value) - .657^2/2), 
 "Rec_dev" = c(0, recdevs_df$Value))
 
-dec_rec <- seq(263.5500, 100.5675, length.out = 11) #getting recruitment down to 40% reduction level
+#getting recruitment down to 40% reduction level
+# 253.55 = last year of recruitment from the model ("rec$Rec")
+#166.7759 is mean rec from model for last 5 years
+# dec_rec <- seq(166.7759, 146.089, length.out = 11) 
 
-dec_rec_2 <- rnorm(n = 15, mean = 100.5675, sd = 25)
-dec_rec_full <- c(dec_rec[-1], dec_rec_2)
-test_recdevs <- log(dec_rec_full/167.6124)
-test_recdevs_mat <- matrix(data = c(0,recdevs_df$Value,test_recdevs), ncol = 1)
+# dec_rec_2 <- rnorm(n = 15, mean = 146.089, sd = 25)
+# dec_rec_full <- c(dec_rec[-1], dec_rec_2)
+# test_recdevs <- log(dec_rec_full/167.6124)
+# test_recdevs_mat <- matrix(data = c(0,recdevs_df$Value,test_recdevs), ncol = 1)
 
-reptest <- SS_output(file.path(main.dir, "FRS_only_poorrec_25_yrfwd", "1", "om"))
-reptest_rec <- reptest$derived_quants %>%
-filter(str_detect(Label, "Rec")) %>% 
-separate(col = Label, into = c("Rec", "Year"), sep = "_") %>%
+# log_devs_dec <- log(dec_rec[-1]/167.6124) + ((0.15^2)/2)
+# log_devs_phase2 <- log(rep(100,15)/180.859) + ((0.15^2)/2)
+
+decline_rate <- (0.65^(1/10)) - 1  # -5.1% per year for 40% total decline
+years_decline <- 10
+years_constant <- 15
+
+# Create multiplier vector for decline years
+decline_multiplier <- numeric(years_decline)
+for(t in 1:years_decline) {
+  decline_multiplier[t] <- (1 + decline_rate)^t
+}
+
+# Step 2: Create constant multiplier for remaining years
+constant_multiplier <- rep(0.65, years_constant)  # 40% decline = 60% of original
+
+# Step 3: Combine both periods
+total_multiplier <- c(decline_multiplier, constant_multiplier)
+
+# Step 4: Apply to your recent mean
+recent_mean <- 162.4478  #166.7759mean from last 5 years #162.4478 is mean SR-curve rec
+extended_dec_vec <- recent_mean * total_multiplier
+
+# Step 5: Calculate recruitment deviations for all 25 years
+sigma_r <- .35
+extended_rec_devs <- log(extended_dec_vec / recent_mean) - ((sigma_r^2)/2)
+plot(x = 1:length(extended_rec_devs), y = extended_rec_devs)
+
+omctl <- SS_readctl_3.30(file = file.path("models", "opaka-om-25-recdevs-test", "codOM.ctl"),
+datlist = file.path("models", "opaka-om-25-recdevs-test", "codOM.dat"))
+omctl$recdev_input[76:100,2] <- extended_rec_devs
+omctl$F_setup2[76:100,"Fvalue"] <- F_comm_df[76:100,1]
+omctl$F_setup2[176:200,"Fvalue"] <- F_noncomm_df[76:100,1]
+# omctl$F_setup2[76:100,"Fvalue"] <- 0
+# omctl$F_setup2[176:200,"Fvalue"] <- 0
+
+SS_writectl_3.30(omctl, outfile = file.path("models", "opaka-om-25-recdevs-test", "codOM.ctl"), overwrite = T)
+
+#run ss3 -nohess for om
+
+reptest <- SS_output(file.path("models", "opaka-om-25-recdevs-test"))
+
+reptest$derived_quants %>% filter(str_detect(Label, "Rec")) %>%
+separate(col = Label, into = c("Recr", "Year"), sep = "_") %>%
+mutate(Year = as.numeric(Year),
+    period = ifelse(Year <=75 & Year >=69, "early", "late"),
+    period = ifelse(Year <69, "NA", period),
+    period = ifelse(Year >75 & Year <=85, "decline", period),
+    period = ifelse(is.na(Year), "init", period)) %>%
+    group_by(period) %>% summarise(mean = mean(Value), min = min(Value), max = max(Value))
+
+
+reptest_ssb <- reptest$derived_quants %>%
+filter(str_detect(Label, "SSB")) %>% 
+separate(col = Label, into = c("SSB", "Year"), sep = "_") %>%
 mutate(Year = as.numeric(Year)) %>%
-filter(!is.na(Year)) %>% pull(Value)
+filter(!is.na(Year)) %>%
+mutate(
+    period = ifelse(Year <=75 & Year >=69, "early", "late"),
+    period = ifelse(Year <69, "NA", period),
+    period = ifelse(Year >75 & Year <=85, "decline", period),
+    period = ifelse(is.na(Year), "init", period)) %>%
+    group_by(period) %>% summarise(mean = mean(Value), min = min(Value), max = max(Value))
 
+reptest$parameters %>% filter(str_detect(Label, "RecrDev")) %>% select(c(Label, Value))
+
+
+
+reptest_rec %>% ggplot(aes(x = Year, y = Value)) + geom_line() + geom_point()
+reptest_ssb %>% ggplot(aes(x = Year, y = Value)) + geom_line()
 
 plot(rec$Year, y = rec$SR_rec, type = "l", col = "orange", xlim = c(1,100), ylim = c(0,800))
 abline(h = 187.0477, col = "darkblue", lty = 2) #mean Rec
 abline(h = 167.6124, col = "darkorange", lty = 2) #mean SR recruitment
-abline(h = 100.5675, col = "red4", lty = 2) #reduced by 40% mean SR recruitment
+abline(h = 100.5674, col = "red4", lty = 2) #reduced by 40% mean SR recruitment
 lines(rec$Year, y = rec$Rec, col = "blue")
 lines(rec$Year, y = rec$Calc_rec, col = "blue", lty = 2)
-lines(76:85, y = dec_rec[-1], col = "red", lty = 3, lwd = 1.5)
-lines(86:100, y = dec_rec_2, col = "red", lty = 3, lwd = 1.5)
-lines(1:100, y = reptest_rec, col = "red")
+lines(76:100, y = extended_dec_vec, col = "red", lty = 3, lwd = 1.5)
+#lines(86:100, y = extended_dec_vec, col = "red", lty = 3, lwd = 1.5)
+lines(1:100, y = reptest_rec$Value, col = "red")
 
 ```
 
@@ -277,15 +342,13 @@ get_fits_all(
 
 ```
 
-### troubleshooting
+### Checking results
 
 ```{r}
-library(gghighlight)
-
 
 reps <- SSgetoutput(dirvec = c(
-file.path(main.dir, "HRF_SQ_25_yrfwd", "10", "om"),
-file.path(main.dir, "HRF_SQ_25_yrfwd", "10", "em")
+file.path(main.dir, "models", "opaka-om-25-recdevs-test"),
+file.path(main.dir, "models", "opaka-om-25-recdevs-test", "em")
 # file.path(main.dir, "HRF_SQ_25_yrfwd", "10", "om"),
 # file.path(main.dir, "HRF_SQ_25_yrfwd", "10", "em")
 ))
@@ -294,168 +357,21 @@ SSplotComparisons(reps_sum)
 SSplotComparisons(reps_sum, legendlabels = c("prOM", "prEM"),  models = c(1,2), uncertainty = F)
 SS_plots(reps$replist2)
 
-reps_sum$SpawnBio %>% mutate(mre = (replist2 - replist1)/replist1) %>%
-ggplot(aes(x = Yr, y = mre)) + geom_line() + geom_hline(yintercept = 0)
-
-std_df <- reps$replist2$timeseries %>%
-select(Yr, SpawnBio, Recruit_0, 'obs_cat:_1', 'obs_cat:_2') %>%
- rename(
-      Comm_catch = `obs_cat:_1`,
-      Noncomm_catch = `obs_cat:_2`
-    ) %>%
-     pivot_longer(
-      cols = c(SpawnBio:Noncomm_catch),
-      names_to = "name",
-      values_to = "value"
-    ) %>% 
-    filter(Yr > 0) %>%
-    group_by(name) %>%
-    mutate(value_standardized = (value /mean(value)) ) %>%
-    ungroup()
-
-std_df <- reps$replist2$cpue %>% 
-select(Yr, Fleet, Obs) %>%
-mutate(name = recode(Fleet,  `1` = "Comm_cpue",
-                      `3` = "BFISH_cpue"),
-       value = Obs) %>%
-    select(Yr, name, value) %>%
-    group_by(name) %>%
-    mutate(value_standardized = (value /mean(value)) ) %>%
-    ungroup() %>% 
-    bind_rows(std_df)
-
-## calculate mean length 
-  dbase <- reps$replist2[["lendbase"]] 
-  seas <- "comb"
-  type <- "len"
-  partitions <- sort(unique(dbase[["Part"]])) # values are 0, 1, or 2
-    partition.labels <- c("whole", "discarded", "retained")[partitions + 1]
-    partition.labels <- paste0("(", paste(partition.labels, collapse = "&"), " catch)")
-    # indx is string combining fleet, year, and potentially conditional bin
-    indx <- paste(dbase[["Fleet"]], dbase[["Yr"]], if (type == "con") {
-      dbase$"Lbin_lo"
-    } else {
-      ""
-    }, if (seas == "sep") dbase[["Seas"]] else "")
-    sex.flag <- type != "con" & max(tapply(
-      dbase$"Sexes",
-      dbase[["Fleet"]], function(x) length(unique(x))
-    )) > 1
-    if (sex.flag) {
-      indx <- paste(indx, dbase$"Sexes")
-    }
-    method.flag <- type == "size" && length(unique(dbase[["method"]])) > 1
-    if (method.flag) {
-      indx <- paste(indx, dbase[["method"]])
-    }
-    # unique strings in indx vector
-    uindx <- unique(indx)
-# create empty data.frame to store information on each observation
-    pldat <- matrix(0, length(uindx), 10,
-      dimnames = list(
-        uindx,
-        c(
-          "Obsmn", "Obslo", "Obshi", "semn", "Expmn", "Std.res",
-          "ObsloAdj", "ObshiAdj", "Fleet", "Yr"
-        )
-      )
-    )
-    # Find the weighting factor for this combination of factors
-    for (i in seq_along(uindx)) { # each row of pldat is an individual comp
-      subdbase <- dbase[indx == uindx[i], ]
-      xvar <- subdbase[["Bin"]]
-      # observed mean
-      pldat[i, "Obsmn"] <- sum(subdbase[["Obs"]] * xvar) / sum(subdbase[["Obs"]])
-      # expected mean
-      pldat[i, "Expmn"] <- sum(subdbase[["Exp"]] * xvar) / sum(subdbase[["Exp"]])
-
-      # use adjusted input sample size for Francis or MI weighting options
-      Nsamp <- subdbase[["Nsamp_adj"]]
-      if ("Nsamp_DM" %in% names(subdbase) || any(is.na(subdbase[["Nsamp_DM"]]))) {
-        # dirichlet multinomial newer format
-        Nsamp <- subdbase[["Nsamp_DM"]]
-      }
-
-      # standard error of the mean
-      pldat[i, "semn"] <- sqrt((sum(subdbase[["Exp"]] * xvar^2) / sum(subdbase[["Exp"]]) -
-        pldat[i, "Expmn"]^2) / mean(Nsamp))
-      # calculate confidence intervals and other stuff
-      pldat[i, "Obslo"] <- pldat[i, "Obsmn"] - 2 * pldat[i, "semn"]
-      pldat[i, "Obshi"] <- pldat[i, "Obsmn"] + 2 * pldat[i, "semn"]
-      pldat[i, "Std.res"] <- (pldat[i, "Obsmn"] - pldat[i, "Expmn"]) / pldat[i, "semn"]
-      pldat[i, "Fleet"] <- mean(subdbase[["Fleet"]])
-      pldat[i, "Yr"] <- mean(if (seas == "comb") subdbase[["Yr"]] else subdbase[["Yr.S"]])
-      if (type == "con") pldat[i, "Lbin"] <- mean(subdbase$"Lbin_lo")
-      if (sex.flag) {
-        pldat[i, "sexes"] <- mean(subdbase$"Sexes")
-      }
-      if (type == "size") {
-        pldat[i, "method"] <- mean(subdbase[["method"]])
-        plunits[i] <- subdbase[["units"]][1] # units of size comps
-      }
-    }
-    Nmult <- 1 / var(pldat[, "Std.res"], na.rm = TRUE)
-
-    # Find the adjusted confidence intervals
-    for (i in seq_along(uindx)) {
-      pldat[i, "ObsloAdj"] <- pldat[i, "Obsmn"] - 2 * pldat[i, "semn"] / sqrt(Nmult)
-      pldat[i, "ObshiAdj"] <- pldat[i, "Obsmn"] + 2 * pldat[i, "semn"] / sqrt(Nmult)
-    }
-
-std_df <- pldat %>%
-as.data.frame() %>%
-mutate(name = "BFISH_mean_length",
-value = Obsmn) %>% 
-select(Yr, name, value) %>%
-mutate(value_standardized = (value /mean(value)) ) %>%
-bind_rows(std_df)
-
-std_df %>% 
-ggplot(aes(x = Yr, y = value_standardized, group = name, color = name)) +
-geom_point() + 
-geom_line() +
-theme_bw()
-
-std_df %>% 
-ggplot(aes(x = Yr, y = value_standardized, group = name, color = name)) +
-geom_point() + 
-geom_line() +
-gghighlight(str_detect(name, "SpawnBio|BF")) +
-theme_bw()
-
-std_df %>% 
-ggplot(aes(x = Yr, y = value_standardized, group = name, color = name)) +
-geom_point() + 
-geom_line() +
-gghighlight(str_detect(name, "SpawnBio|cpue")) +
-theme_bw()
-
-
-std_df %>% 
-ggplot(aes(x = Yr, y = value_standardized, group = name, color = name)) +
-geom_point() + 
-geom_line() +
-gghighlight(str_detect(name, "SpawnBio|catch")) +
-theme_bw()
-
-
-reps_sum$SpawnBio %>% 
-filter(Yr > 0) %>%
-mutate(re = (replist2 - replist1)/replist1) %>%
-ggplot(aes(x = Yr, y = re)) +
-geom_line() +
-geom_hline(yintercept = 0) +
-theme_bw()
-
-
-```
-
-### Checking results
-
-```{r}
+reps$replist1$derived_quants %>% filter(str_detect(Label, "Rec")) %>%
+separate(col = Label, into = c("Recr", "Year"), sep = "_") %>%
+mutate(Year = as.numeric(Year),
+    period = ifelse(Year <=75, "early", "late"),
+    period = ifelse(Year >75 & Year <=85, "decline", period),
+    period = ifelse(is.na(Year), "init", period)) %>%
+    group_by(period) %>% summarise(mean = mean(Value), min = min(Value), max = max(Value))
 
 rep <- SS_output(file.path(main.dir, "HRF_poorrec_perfectdata_25_yrfwd/9/em"))
 SS_plots(rep)
+
+ssb_msy <- rep$derived_quants %>% filter(str_detect(Label, "SSB_MSY")) %>% pull(Value) 
+.865*ssb_msy
+rep$exploitation
+
 reps <- SSgetoutput(dirvec = c(
 file.path(main.dir, "HRF_poorrec_perfectdata_25_yrfwd", "1", "om"),
 file.path(main.dir, "HRF_poorrec_perfectdata_25_yrfwd", "1", "em"),
