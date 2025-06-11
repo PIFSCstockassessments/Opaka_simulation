@@ -22,10 +22,10 @@ load("Inputs/poor_recdevs_mat.RData")
 #Variables
 nyears <- 100
 nyears_fwd <- 25
-scen <- "HRF_SQ"
+scen <- "HRF_poorrec"
 
 #Template OM and EM files
-om_dir <- paste0("opaka-om-", nyears_fwd, "-R0_trend") #, "-selex/" "-FRS-only" , "-R0_trend"
+om_dir <- paste0("opaka-om-", nyears_fwd) #, "-selex/" "-FRS-only" , "-R0_trend"
 em_dir <- paste0("opaka-em-", nyears_fwd)
 
 #Get iteration number
@@ -44,15 +44,15 @@ index <- list(
     fleets = c(1, 3), 
     years = list(seq(1, 75, by = 1), seq(69, nyears, by = 1)),
     seas = list(7,1), 
-    sds_out = list(.02, .02),
-    sds_obs = list(0.01, 0.01)
-    # sds_obs = list(0.2, sas[which(sas$N_years == nyears_fwd), "Resfish_sd_obs"]),
-    # sds_out = list(0.13, sas[which(sas$N_years == nyears_fwd), "Resfish_index_CV"]) 
+    # sds_out = list(.02, .02),
+    # sds_obs = list(0.01, 0.01)
+    sds_obs = list(0.2, sas[which(sas$N_years == nyears_fwd), "Resfish_sd_obs"]),
+    sds_out = list(0.13, sas[which(sas$N_years == nyears_fwd), "Resfish_index_CV"]) 
 )
 
 lcomp <- list(
-    fleets = c(3), Nsamp = list(rep(150, 32)),
-    # Nsamp = list(c(rep(30, 7), rep(sas[which(sas$N_years == nyears_fwd), "Neff_len_Resfish"], nyears_fwd))),
+    fleets = c(3), #Nsamp = list(rep(150, 32)),
+    Nsamp = list(c(rep(30, 7), rep(sas[which(sas$N_years == nyears_fwd), "Neff_len_Resfish"], nyears_fwd))),
     years = list(seq(69, nyears, by = 1))
 )
 
@@ -60,13 +60,13 @@ seed <- set.seed[I,2]
 
 ss3sim_base(
     iterations = I,
-    scenarios = "HRF_test",  #paste(scen, nyears_fwd, "yrfwd", sep = "_"), 
+    scenarios = "new_poorrec_test",  #paste(scen, nyears_fwd, "yrfwd", sep = "_"), 
     f_params = F_list,
     index_params = index,
     lcomp_params = lcomp,
     om_dir = file.path(main.dir, "models", om_dir),
     em_dir = file.path(main.dir, "models", em_dir),
-    user_recdevs = full_recdevs,
+    user_recdevs = full_poor_recdevs,
     bias_adjust = T,
     seed = seed
 )
