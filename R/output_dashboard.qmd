@@ -21,7 +21,7 @@ source(file.path(main.dir, "R", "mean_length_fun.r"))
 #| echo: false
 # read in results from simulation runs
 
-files <- list.files(main.dir, pattern = "all_scen", full.names = T)
+files <- list.files(main.dir, pattern = "hrf_sq", full.names = T)
 results.list <-  lapply(files, read.csv)
 
 # rename FRS scenarios to match the naming convention of others
@@ -49,13 +49,13 @@ agecomp_df <- data.frame(results.list[agecomp.ind])
 lencomp_df <- data.frame(results.list[lencomp.ind])
 index_df <- data.frame(results.list[index.ind])
 
-
 #find models that didn't converge for filtering later
 nonconverged_its <- scalar_df %>% 
     filter(max_grad > 1e-4) %>% 
     select(c(model_run, iteration,scenario)) %>% 
     mutate(nonconverged_run = paste(scenario, iteration, sep = "_"))
 ```
+
 
 # Checking inputs  
 
@@ -76,7 +76,6 @@ ts_re <- calculate_re(results_ts)
 
 results_ts %>% 
 mutate(rec_scen = ifelse(str_detect(scenario, "poorrec"), "poorrec", "SQ")) %>% 
-#mutate(rec_scen = ifelse(str_detect(scenario, "FRS_only_25_yrfwd"), "SQ", rec_scen)) %>% 
 filter(model_run == "om") %>% 
 filter(iteration < 51) %>%
 ggplot() +
@@ -89,7 +88,6 @@ labs(subtitle = "Recruitment deviations in OMs for SQ and poor rec scenarios", x
 
 results_ts %>% 
 mutate(rec_scen = ifelse(str_detect(scenario, "poorrec"), "poorrec", "SQ")) %>% 
-#mutate(rec_scen = ifelse(str_detect(scenario, "FRS_only_25_yrfwd"), "SQ", rec_scen)) %>% 
 filter(model_run == "om") %>% 
 filter(iteration > 50) %>%
 ggplot() +
@@ -112,7 +110,7 @@ geom_point(data = . %>% filter(model_run == "em"),
             aes(y = Obs, color = "Observed", shape = "Observed"), size = 2) +
 geom_line(data = . %>% filter(model_run == "em"), 
         aes(y = Exp, color = "Expected", linetype = "Expected")) +
-facet_grid(Rec_scenario ~ scenario) + 
+facet_grid(Rec_scenario ~ scenario, scales = "free_y") + 
 scale_color_manual(name = "Data types", 
                     values = c("Simulated" = "blue", 
                             "Observed" = "#1B9E77",
@@ -188,6 +186,22 @@ labs(x = "Year", y = "Residuals", title = "Residuals for BFISH Index Fits") +
 theme_bw()
 ```
 
+
+```{r}
+index_df %>%
+filter(model_run == "em" & Fleet_name == "Comm" & str_detect(scenario, "FRSonly")) %>%
+filter(iteration == 1) %>%
+separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
+remove = F) %>% 
+ggplot(aes(x = year)) + 
+geom_point(aes(y = Obs, group = Rec_scenario, color = Rec_scenario)) +
+geom_line(aes(y = Exp, group = Rec_scenario, color = Rec_scenario)) + 
+labs(x = "Year", y = "CPUE", 
+title = "FRS CPUE Fit for One Iteration",
+caption = "Points are observed values, lines are expected") +
+theme_bw()
+```
+
 ## 
 
 ```{r}
@@ -242,10 +256,10 @@ n_iterations
 
 ```{r}
 ts_re %>%
-filter(year <= 100) %>%
+filter(year <= 2023) %>%
 group_by(scenario, year) %>% 
 summarise(med_re = quantile(SpawnBio_re, .5),
-uci = quantile(SpawnBio_re, .95),
+uci = quantile(SpawnBio_re, .975),
 lci = quantile(SpawnBio_re, .05)) %>% 
 separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
 remove = F) %>% 
@@ -280,7 +294,7 @@ theme_bw()
 ts_re %>%
 group_by(scenario, year) %>% 
 filter(year < 101) %>%
-summarise(med_re = quantile(F_1_re, .5), 
+summarise(med_re = mean(F_1_re), 
 uci = quantile(F_1_re, .95), 
 lci = quantile(F_1_re, .05)) %>% 
 separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
@@ -293,6 +307,21 @@ facet_wrap(~Rec_scenario) +
 labs(x = "Year", y = "F MRE") + 
 theme_bw()
 
+```
+
+```{r}
+ts_re %>%
+group_by(scenario, year) %>% 
+filter(iteration == 10) %>% 
+separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
+remove = F) %>% 
+ggplot() +
+geom_hline(yintercept = 0, color = "grey60") +
+geom_line(aes(x = year, y = F_1_om, color = scenario), linetype = 2) + 
+geom_line(aes(x = year, y = F_1_em, color = scenario)) +
+facet_grid(scen ~ Rec_scenario) + 
+labs(x = "Year", y = "F") + 
+theme_bw()
 ```
 
 ##  
@@ -352,7 +381,7 @@ separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_
 remove = F) %>% 
 ggplot() +
 geom_hline(yintercept = 0, color = "grey60") +
-geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scen), alpha = .25) + 
+# geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scen), alpha = .25) + 
 geom_line(aes(x = year, y = med_re, color = scen), linewidth = 1.2) +
 facet_wrap(~Rec_scenario) + 
 labs(x = "Year", y = "Recruitment MRE") + 
@@ -413,6 +442,201 @@ theme_bw()
 ```
 
 # Diagnostics  
+
+```{r}
+#| title: "SSB_SSBMSST Confusion Matrix"
+#library(caret)
+
+# Function to create confusion matrix for a specific scenario (all metrics calculated manually)
+create_confusion_matrix <- function(data, scenario_name, metric_col = "ssb_ssbmsst", threshold = 1, direction = "greater", verbose = F) {
+  # Filter data for the specific scenario
+  scenario_data <- data %>% 
+    filter(scenario == scenario_name)
+  
+  # Print diagnostic information
+  if(verbose){
+    cat("===== DIAGNOSTIC INFORMATION =====\n")
+    cat("Scenario:", scenario_name, "\n")
+    cat("Number of rows after filtering:", nrow(scenario_data), "\n")
+    
+    # Check unique iterations and model runs
+    cat("Number of unique iterations:", length(unique(scenario_data$iteration)), "\n")
+    cat("Model runs present:", paste(unique(scenario_data$model_run), collapse = ", "), "\n")
+  }
+
+  # Check for data completeness
+  completeness_check <- scenario_data %>%
+    group_by(iteration) %>%
+    summarize(
+      model_count = n_distinct(model_run),
+      has_om = "om" %in% model_run,
+      has_em = "em" %in% model_run
+    )
+
+  if(verbose){
+    cat("Iterations with both model runs:", sum(completeness_check$model_count == 2), "\n")
+    cat("Iterations missing om:", sum(!completeness_check$has_om), "\n")
+    cat("Iterations missing em:", sum(!completeness_check$has_em), "\n")
+  }
+
+  # Create wide format
+  wide_data <- scenario_data %>%
+    pivot_wider(
+      id_cols = iteration,
+      names_from = model_run,
+      values_from = all_of(metric_col)
+    )
+
+   if(verbose){ 
+    # Count missing values in wide format
+    cat("Wide format rows:", nrow(wide_data), "\n")
+    cat("Missing om values:", sum(is.na(wide_data$om)), "\n")
+    cat("Missing em values:", sum(is.na(wide_data$em)), "\n")
+   }
+  # Filter out rows with missing values
+  wide_data_complete <- wide_data %>% 
+    filter(!is.na(om) & !is.na(em))
+  
+  if(verbose){
+    cat("Complete cases after filtering NAs:", nrow(wide_data_complete), "\n")
+  }
+
+  # Check binary class distribution
+  if(direction == "greater"){
+    om_binary <- wide_data_complete$om > threshold
+    em_binary <- wide_data_complete$em > threshold
+  }
+  if(direction == "less"){
+    om_binary <- wide_data_complete$om < threshold
+    em_binary <- wide_data_complete$em < threshold
+  }
+  
+  if(verbose){
+    cat("\n===== BINARY CLASSIFICATION COUNTS =====\n")
+    cat("om > threshold:", sum(om_binary), "\n")
+    cat("om ≤ threshold:", sum(!om_binary), "\n")
+    cat("em > threshold:", sum(em_binary), "\n")
+    cat("em ≤ threshold:", sum(!em_binary), "\n")
+  }
+  
+  # Create manual 2x2 table to see all combinations
+  manual_table <- table(Predicted = em_binary, Reference = om_binary)
+  if(verbose){
+    cat("\n===== MANUAL CONFUSION MATRIX =====\n")
+    print(manual_table)
+  }
+
+  # Check if we have edge cases
+  all_om_positive <- all(om_binary)
+  all_om_negative <- all(!om_binary)
+  all_em_positive <- all(em_binary)
+  all_em_negative <- all(!em_binary)
+  
+  # Handle case where all predictions are the same class
+  if(verbose){
+  if(all_om_positive || all_om_negative || all_em_positive || all_em_negative ) {
+    cat("\n===== EDGE CASE DETECTED =====\n")
+    if(all_om_positive) cat("All om values are > threshold (all positive reference)\n")
+    if(all_om_negative) cat("All om values are ≤ threshold (all negative reference)\n")
+    if(all_em_positive) cat("All em values are > threshold (all positive predictions)\n")
+    if(all_em_negative) cat("All em values are ≤ threshold (all negative predictions)\n")
+  }
+  } 
+    # Calculate metrics manually
+    TP <- sum(om_binary & em_binary)
+    TN <- sum(!om_binary & !em_binary)
+    FP <- sum(!om_binary & em_binary)
+    FN <- sum(om_binary & !em_binary)
+    
+    accuracy <- (TP + TN) / (TP + TN + FP + FN)
+    
+    # Calculate non-NA metrics where possible
+    sensitivity <- if(TP + FN > 0) TP / (TP + FN) else NA
+    specificity <- if(TN + FP > 0) TN / (TN + FP) else NA
+    ppv <- if(TP + FP > 0) TP / (TP + FP) else NA
+    npv <- if(TN + FN > 0) TN / (TN + FN) else NA
+    
+    if(verbose){
+        cat("\n===== CONFUSION MATRIX METRICS =====\n")
+        cat("Accuracy:", accuracy, "\n")
+        cat("Sensitivity (Recall):", sensitivity, "\n")
+        cat("Specificity:", specificity, "\n")
+        cat("PPV (Precision):", ppv, "\n")
+        cat("NPV:", npv, "\n")
+    }
+    
+    # Create a results structure similar to confusionMatrix
+    result <- list(
+      table = manual_table,
+      overall = c(Accuracy = accuracy),
+      byClass = c(
+        Sensitivity = sensitivity,
+        Specificity = specificity,
+        "Pos Pred Value" = ppv,
+        "Neg Pred Value" = npv
+      ),
+      summary_table = data.frame(
+        Scenario = scenario_name, 
+        Accuracy = accuracy,
+        Sensitivity = sensitivity, 
+        Specificity = specificity, 
+        PPV = ppv,
+        NPV = npv)
+    )
+
+    return(result)
+  }
+  
+# Example using the default column name (ssb_ssbmst)
+LRF_SQ_conmat <- create_confusion_matrix(ref_pt_df, "LRF_SQ_25_yrfwd")
+LRF_poorrec_conmat <- create_confusion_matrix(ref_pt_df, "LRF_poorrec_25_yrfwd")
+IRF_SQ_conmat <- create_confusion_matrix(ref_pt_df, "IRF_SQ_25_yrfwd")
+IRF_poorrec_conmat <- create_confusion_matrix(ref_pt_df, "IRF_poorrec_25_yrfwd")
+HRF_SQ_conmat <- create_confusion_matrix(ref_pt_df, "HRF_SQ_25_yrfwd")
+HRF_poorrec_conmat <- create_confusion_matrix(ref_pt_df, "HRF_poorrec_25_yrfwd")
+FRSonly_SQ_conmat <- create_confusion_matrix(ref_pt_df, "FRSonly_SQ_25_yrfwd")
+FRSonly_poorrec_conmat <- create_confusion_matrix(ref_pt_df, "FRSonly_poorrec_25_yrfwd")
+
+
+conmat_summary <- rbind(LRF_SQ_conmat[["summary_table"]], LRF_poorrec_conmat[["summary_table"]],
+IRF_SQ_conmat[["summary_table"]], IRF_poorrec_conmat[["summary_table"]],
+HRF_SQ_conmat[["summary_table"]], HRF_poorrec_conmat[["summary_table"]],
+FRSonly_SQ_conmat[["summary_table"]], FRSonly_poorrec_conmat[["summary_table"]])
+
+conmat_summary
+
+```
+
+```{r}
+#| title: "F_FMSY Confusion Matrix"
+ref_pt_df %>% filter(F_Fmsy > 1)
+
+# Example using the default column name (ssb_ssbmst)
+LRF_SQ_conmat <- create_confusion_matrix(ref_pt_df, "LRF_SQ_25_yrfwd", 
+                    metric_col = "F_Fmsy", threshold = 1, direction = "less")
+LRF_poorrec_conmat <- create_confusion_matrix(ref_pt_df, "LRF_poorrec_25_yrfwd", 
+                        metric_col = "F_Fmsy", threshold = 1, direction = "less")
+IRF_SQ_conmat <- create_confusion_matrix(ref_pt_df, "IRF_SQ_25_yrfwd", 
+                    metric_col = "F_Fmsy", threshold = 1, direction = "less")
+IRF_poorrec_conmat <- create_confusion_matrix(ref_pt_df, "IRF_poorrec_25_yrfwd", 
+                        metric_col = "F_Fmsy", threshold = 1, direction = "less")
+HRF_SQ_conmat <- create_confusion_matrix(ref_pt_df, "HRF_SQ_25_yrfwd", 
+                    metric_col = "F_Fmsy", threshold = 1, direction = "less")
+HRF_poorrec_conmat <- create_confusion_matrix(ref_pt_df, "HRF_poorrec_25_yrfwd", 
+                        metric_col = "F_Fmsy", threshold = 1, direction = "less")
+FRSonly_SQ_conmat <- create_confusion_matrix(ref_pt_df, "FRSonly_SQ_25_yrfwd", 
+                        metric_col = "F_Fmsy", threshold = 1, direction = "less")
+FRSonly_poorrec_conmat <- create_confusion_matrix(ref_pt_df, "FRSonly_poorrec_25_yrfwd", 
+                            metric_col = "F_Fmsy", threshold = 1, direction = "less")
+
+conmat_summary <- rbind(LRF_SQ_conmat[["summary_table"]], LRF_poorrec_conmat[["summary_table"]],
+IRF_SQ_conmat[["summary_table"]], IRF_poorrec_conmat[["summary_table"]],
+HRF_SQ_conmat[["summary_table"]], HRF_poorrec_conmat[["summary_table"]],
+FRSonly_SQ_conmat[["summary_table"]], FRSonly_poorrec_conmat[["summary_table"]])
+
+conmat_summary
+```
+
 ```{r}
 #| label: index
 #| eval: false

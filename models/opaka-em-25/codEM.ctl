@@ -104,26 +104,26 @@
 0  # 0/1 to use steepness in initial equ recruitment calculation
 0  #  future feature:  0/1 to make realized sigmaR a function of SR curvature
 #_          LO            HI          INIT         PRIOR         PR_SD       PR_type      PHASE    env-var    use_dev   dev_mnyr   dev_mxyr     dev_PH      Block    Blk_Fxn #  parm_name
-             5           5.5          5.2             0             0             0          1          0          0          0          0          0          0          0 # SR_LN(R0)
+             3             7       5.65547             0             0             0          1          0          0          0          0          0          0          0 # SR_LN(R0)
            0.2             1          0.76             0             0             0         -2          0          0          0          0          0          0          0 # SR_BH_steep
-             0             2          0.35             0             0             0         -4          0          0          0          0          0          0          0 # SR_sigmaR
+             0             2          0.52             0             0             0         -4          0          0          0          0          0          0          0 # SR_sigmaR
             -5             5             0             0             0             0         -4          0          0          0          0          0          0          0 # SR_regime
              0             0             0             0             0             0        -99          0          0          0          0          0          0          0 # SR_autocorr
 #_no timevary SR parameters
 2 #do_recdev:  0=none; 1=devvector (R=F(SSB)+dev); 2=deviations (R=F(SSB)+dev); 3=deviations (R=R0*dev; dev2=R-f(SSB)); 4=like 3 with sum(dev2) adding penalty
-69 # first year of main recr_devs; early devs can preceed this era
-97 # last year of main recr_devs; forecast devs start in following year
+1996 # first year of main recr_devs; early devs can preceed this era
+2023 # last year of main recr_devs; forecast devs start in following year
 2 #_recdev phase 
 1 # (0/1) to read 13 advanced options
- 1 #_recdev_early_start (0=none; neg value makes relative to recdev_start)
- 4 #_recdev_early_phase
- 4 #_forecast_recruitment phase (incl. late recr) (0 value resets to maxphase+1)
+ -31 #_recdev_early_start (0=none; neg value makes relative to recdev_start)
+ 2 #_recdev_early_phase
+-4 #_forecast_recruitment phase (incl. late recr) (0 value resets to maxphase+1)
  1 #_lambda for Fcast_recr_like occurring before endyr+1
-1000   #_last_early_yr_nobias_adj_in_MPD 
-27   #_first_yr_fullbias_adj_in_MPD 
-97   #_last_yr_fullbias_adj_in_MPD 
-98   #_first_recent_yr_nobias_adj_in_MPD 
-0.9112  #_max_bias_adj_in_MPD (1.0 to mimic pre-2009 models) 
+ 1901.9 #_last_yr_nobias_adj_in_MPD; begin of ramp
+ 1983 #_first_yr_fullbias_adj_in_MPD; begin of plateau
+ 2019.9 #_last_yr_fullbias_adj_in_MPD
+ 2023.8 #_end_yr_for_ramp_in_MPD (can be in forecast to shape ramp, but SS3 sets bias_adj to 0.0 for fcast yrs)
+ 0.9375  #_max_bias_adj_in_MPD (1.0 to mimic pre-2009 models) 
 0 #_period of cycles in recruitment (N parms read below)
  -5 #min rec_dev
  5 #max rec_dev
@@ -141,15 +141,14 @@
 #Fishing Mortality info 
 0.3 # F ballpark value in units of annual_F
 -2001 # F ballpark year (neg value to disable)
-3#2 # F_Method:  1=Pope; 2=instan. F; 3=hybrid (hybrid is recommended)
+3 # F_Method:  1=Pope; 2=instan. F; 3=hybrid (hybrid is recommended)
 2.9 # max F or harvest rate, depends on F_Method
-#0.05  1  0
 4 # N iterations for tuning F in hybrid method (recommend 3 to 7)
 #
 #_initial_F_parms; for each fleet x season that has init_catch; nest season in fleet; count = 0
 #_for unconstrained init_F, use an arbitrary initial catch and set lambda=0 for its logL
 #_ LO HI INIT PRIOR PR_SD  PR_type  PHASE
- 0 0.2 0.0187843 0 0 0 -1 # InitF_seas_1_flt_1Comm
+ 0 0.2 0.0120102 0 0 0 -1 # InitF_seas_1_flt_1Comm
 #
 # F rates by fleet x season
 # Yr:  1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 96 97 98 99 100 101
@@ -164,14 +163,15 @@
 #_5:  0/1 for biasadj or not
 #_6:  0/1 to float
 #_   fleet      link link_info  extra_se   biasadj     float  #  fleetname
-         1         1         0         0         0         0  #  Comm
+         1         1         0         1         0         0  #  Comm
          3         1         0         0         0         0  #  BFISH_ResFish
 -9999 0 0 0 0 0
 #
 #_Q_parms(if_any);Qunits_are_ln(q)
 #_          LO            HI          INIT         PRIOR         PR_SD       PR_type      PHASE    env-var    use_dev   dev_mnyr   dev_mxyr     dev_PH      Block    Blk_Fxn  #  parm_name
-            -5            -3      -3.37779             0             0             0          1          0          0          0          0          0          0          0  #  LnQ_base_FRS(1)
-            -6            -5      -5.64254             0             0             0          1          0          0          0          0          0          0          0  #  LnQ_base_ResFish
+            -5             0      -3.83213             0             0             0          1          0          0          0          0          0          0          0  #  LnQ_base_FRS(1)
+             0           0.5      0.017688             0             0             0          1          0          0          0          0          0          0          0  #  Q_extraSD_FRS(1)
+           -10             0      -6.40783             0             0             0          1          0          0          0          0          0          0          0  #  LnQ_base_BFISH_ResFish(3)
 #_no timevary Q parameters
 #
 #_size_selex_patterns
@@ -222,22 +222,22 @@
  10 0 0 0 # 4 ResFish
 #
 #_          LO            HI          INIT         PRIOR         PR_SD       PR_type      PHASE    env-var    use_dev   dev_mnyr   dev_mxyr     dev_PH      Block    Blk_Fxn  #  parm_name
-# 1   Comm LenSelex
-            25            50       36.0078             0             0             0         -2          0          0          0          0          0          0          0  #  Size_inflection_Comm(1)
-           0.1            20       3.45325             0             0             0         -2          0          0          0          0          0          0          0  #  Size_95%width_Comm(1)
+# 1   FRS LenSelex
+            25            50        36.146             0             0             0          2          0          0          0          0          0          0          0  #  Size_inflection_FRS(1)
+           0.1            20       3.96562             0             0             0          2          0          0          0          0          0          0          0  #  Size_95%width_FRS(1)
 # 2   Non_comm LenSelex
              0            60            40             0             0             0         -2          0          0          0          0          0          0          0  #  Size_inflection_Non_comm(2)
              0            40            11             0             0             0         -2          0          0          0          0          0          0          0  #  Size_95%width_Non_comm(2)
-# 3   ResFish LenSelex
-            15            25       20.5078            36             5             0          3          0          0          0          0          0          0          0  #  Size_DblN_peak_ResFish(3)
-            -2             0     -0.984332          -0.5             2             0          3          0          0          0          0          0          0          0  #  Size_DblN_top_logit_ResFish(3)
-            -5            10     -0.338084          1.75             5             0         -3          0          0          0          0          0          0          0  #  Size_DblN_ascend_se_ResFish(3)
-             2             6       4.03929           0.1             2             0          3          0          0          0          0          0          0          0  #  Size_DblN_descend_se_ResFish(3)
-          -999            15          -999            -1             5             0        -99          0          0          0          0          0          0          0  #  Size_DblN_start_logit_ResFish(3)
-            -5             0      -1.78602             1             5             0          3          0          0          0          0          0          0          0  #  Size_DblN_end_logit_ResFish(3)
-#_No_Dirichlet parameters
-#_no timevary selex parameters
-#
+# 3   BFISH_ResFish LenSelex
+            10            50       20.4917            36             5             0          2          0          0          0          0          0          0          0  #  Size_DblN_peak_BFISH_ResFish(3)
+            -7             7      -1.05702          -0.5             2             0         -3          0          0          0          0          0          0          0  #  Size_DblN_top_logit_BFISH_ResFish(3)
+            -5            10     -0.338084          1.75             5             0         -3          0          0          0          0          0          0          0  #  Size_DblN_ascend_se_BFISH_ResFish(3)
+            -5            10       4.19759           0.1             2             0          4          0          0          0          0          0          0          0  #  Size_DblN_descend_se_BFISH_ResFish(3)
+          -999            15          -999            -1             5             0        -99          0          0          0          0          0          0          0  #  Size_DblN_start_logit_BFISH_ResFish(3)
+          -999            15      -1.46009             1             5             0          4          0          0          0          0          0          0          0  #  Size_DblN_end_logit_BFISH_ResFish(3)
+#_Dirichlet parameters
+#_multiple_fleets_can_refer_to_same_parm;_but_list_cannot_have_gaps
+            -5            10       3.39854             0         1.816             6          2          0          0          0          0          0          0          0  #  ln(DM_theta)_1
 0   #  use 2D_AR1 selectivity(0/1)
 #_no 2D_AR1 selex offset used
 #
@@ -257,9 +257,10 @@
  #_6=mult_by_size-at-age_N
  #_7=mult_by_generalized_sizecomp
 #_Factor  Fleet  Value
+      1      1  0.107538
  -9999   1    0  # terminator
 #
-4 #_maxlambdaphase
+5 #_maxlambdaphase
 1 #_sd_offset; must be 1 if any growthCV, sigmaR, or survey extraSD is an estimated parameter
 # read 0 changes to default Lambdas (default value is 1.0)
 # Like_comp codes:  1=surv; 2=disc; 3=mnwt; 4=length; 5=age; 6=SizeFreq; 7=sizeage; 8=catch; 9=init_equ_catch; 
