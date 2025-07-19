@@ -8,27 +8,42 @@ library(r4ss)
 library(tidyverse)
 library(ss3sim)
 library(stringr)
+
 main.dir <- this.path::here(.. = 1)
-source(file.path(main.dir, "R", "simF.r"))
-source(file.path(main.dir, "R", "make_dummy_dat.r"))
 source(file.path(main.dir, "R", "get_fits.r"))
 set.seed <- read.csv(file.path(main.dir, "Inputs", "setseed.csv"))
 sas_full <- read.csv(file.path(main.dir, "Inputs", "sas.csv"))
 niter <- 100
-rep <- SS_output(dir = file.path(main.dir, "models", "03-simplified-mod"))
 recdevs_df <- read.csv(file.path(main.dir, "Inputs", "recdev_df.csv"))
-F_df <- read.csv(file.path(main.dir, "Inputs" "F_df.csv"))
+F_df <- read.csv(file.path(main.dir, "Inputs", "F_df.csv"))
+load("Inputs/constantF_mat.Rdata")
 ```
 
-### Create rec dev timeseries
-
-I generated a time series of recruitment deviations that result in a 40% decline in mean expected recruitment. To do this, I first calculated the expected recruitment based on the stock-recruitment curve for the first 75 years (solid yellow line). I found the average of that (dotted yellow line) and what a 40% decrease would be. From there, I created a vector of the rate of decline over 10 years to reach the 40% reduced level and then the reduced multiplier. I iteratively tested to find the true value of the decline multiplier that leads to a 40% decline in mean expected recruitment.
-
 ```{r}
+#| eval: false
+#| echo: false
+
+rep <- SS_output(dir = file.path(main.dir, "models", "02_Opaka_BFISH_simulation_EM"))
+rep <- SS_output(dir = file.path(main.dir, "models", "02b_Opaka_BFISH_simulation_EM_FRS_only"))
+
 recdevs_df <- rep$parameters %>% 
 filter(str_detect(Label, "Rec")) %>% 
 select(c(Label, Value)) %>% 
-separate(col = Label, sep = "_", into = c("period", "recdev", "year")) 
+separate(col = Label, sep = "_", into = c("period", "recdev", "year")) %>%
+mutate(year = as.numeric(year)) 
+
+recdevs_df <- bind_rows(data.frame(period = "norec", "recdev" = "RecrDev",
+year = seq(1949,1964), Value = 0), recdevs_df)
+
+
+recdevs_frs <- rep$parameters %>% 
+filter(str_detect(Label, "Rec")) %>% 
+select(c(Label, Value)) %>% 
+separate(col = Label, sep = "_", into = c("period", "recdev", "year")) %>%
+mutate(year = as.numeric(year)) 
+
+recdevs_frs <- bind_rows(data.frame(period = "norec", "recdev" = "RecrDev",
+year = seq(1949,1964), Value = 0), recdevs_df)
 
 ssb <- rep$derived_quants %>% 
 filter(str_detect(Label, "SSB")) %>%
@@ -45,15 +60,26 @@ filter(!is.na(Year)) %>%
 select(Year, Value) %>% 
 rename("Rec" = "Value") %>% 
 mutate("SSB" = ssb, 
-"SR_rec" = (SSB*4*.76*180.859)/(1466.7*(1-.76)+SSB*(5*.76-1)),
-"Calc_rec" = SR_rec*exp(c(0,recdevs_df$Value) - .657^2/2), 
-"Rec_dev" = c(0, recdevs_df$Value))
+"SR_rec" = (SSB*4*.76*287.9365)/(4670.11*(1-.76)+SSB*(5*.76-1)),
+"Calc_rec" = SR_rec*exp(recdevs_df$Value - .52^2/2), 
+"Rec_dev" = recdevs_df$Value)
+
+
+```
+
+
+### Create rec dev timeseries
+
+I generated a time series of recruitment deviations that result in a 40% decline in mean expected recruitment. To do this, I first calculated the expected recruitment based on the stock-recruitment curve for the first 75 years (solid yellow line). I found the average of that (dotted yellow line) and what a 40% decrease would be. From there, I created a vector of the rate of decline over 10 years to reach the 40% reduced level and then the reduced multiplier. I iteratively tested to find the true value of the decline multiplier that leads to a 40% decline in mean expected recruitment.
+
+```{r}
 
 #getting recruitment down to 40% reduction level
-# 253.55 = last year of recruitment from the model ("rec$Rec")
-#166.7759 is mean rec from model for last 5 years
+# 283.9170 = last year of recruitment from the model ("rec$Rec")
+# rec %>% filter(Year > 2018) %>% summarise(mean(Rec)) = 208.9039 is mean rec from model for last 5 years
+# rec %>% filter(Year > 2018) %>% summarise(mean(SR_rec)) = 266.2088
 
-decline_rate <- (0.65^(1/10)) - 1  # -4.2% per year for 35% total decline
+decline_rate <- (0.65^(1/10)) - 1  # -3.5% per year for 30% total decline (to account for effect of lower SSB)
 years_decline <- 10
 years_constant <- 15
 
@@ -64,13 +90,13 @@ for(t in 1:years_decline) {
 }
 
 # Step 2: Create constant multiplier for remaining years
-constant_multiplier <- rep(0.65, years_constant)  # 40% decline = 60% of original
+constant_multiplier <- rep(0.65, years_constant)  # 40% decline = 60% of original (only 30% to account for effect of reduced SSB and SR relationship not linear)
 
 # Step 3: Combine both periods
 total_multiplier <- c(decline_multiplier, constant_multiplier)
 
 # Step 4: Apply to your recent mean
-recent_mean <- 162.4478  #166.7759mean from last 5 years #162.4478 is mean SR-curve rec
+recent_mean <- 266.2088  #319.6154 mean from last 5 years #165.2207 is mean 
 extended_dec_vec <- recent_mean * total_multiplier
 
 # Step 5: Calculate recruitment deviations for all 25 years
@@ -80,25 +106,34 @@ plot(x = 1:length(extended_rec_devs), y = extended_rec_devs)
 
 omctl <- SS_readctl_3.30(file = file.path("models", "opaka-om-25-recdevs-test", "codOM.ctl"),
 datlist = file.path("models", "opaka-om-25-recdevs-test", "codOM.dat"))
-omctl$recdev_input[76:100,2] <- extended_rec_devs
-omctl$F_setup2[76:100,"Fvalue"] <- F_comm_df[76:100,1]
-omctl$F_setup2[176:200,"Fvalue"] <- F_noncomm_df[76:100,1]
-# omctl$F_setup2[76:100,"Fvalue"] <- 0
-# omctl$F_setup2[176:200,"Fvalue"] <- 0
+omctl$N_Read_recdevs <- 100
+omctl$recdev_input <- data.frame(yr = 1949:2048, c(recdevs_df$Value, extended_rec_devs))
+omctl$F_setup[3] <- 200
+omctl$F_setup2 <- data.frame(fleet = 1, yr = 1949:2048, 
+                              seas = 1, Fvalue = F_comm_df[,1], 
+                              se = 0.01, phase = -1)
+
+omctl$F_setup2 <- rbind(omctl$F_setup2, 
+                        data.frame(fleet = 2, yr = 1949:2048, 
+                              seas = 1, Fvalue = F_noncomm_df[,1], 
+                              se = 0.01, phase = -1))
+
 
 SS_writectl_3.30(omctl, outfile = file.path("models", "opaka-om-25-recdevs-test", "codOM.ctl"), overwrite = T)
 
 #run ss3 -nohess for om
 
-reptest <- SS_output(file.path("models", "opaka-om-25-recdevs-test"))
+reptest <- SS_output(file.path("models", "opaka-om-25-recdevs-test"), covar = F)
+#SS_plots(reptest)
+## looking for ~172 in rec 
 
 reptest$derived_quants %>% filter(str_detect(Label, "Rec")) %>%
 separate(col = Label, into = c("Recr", "Year"), sep = "_") %>%
 mutate(Year = as.numeric(Year),
-    period = ifelse(Year <=75 & Year >=69, "early", "late"),
-    period = ifelse(Year <69, "NA", period),
-    period = ifelse(Year >75 & Year <=85, "decline", period),
-    period = ifelse(is.na(Year), "init", period)) %>%
+    period = ifelse(Year <= 1995, "early", "main"),
+    period = ifelse(Year > 2023 & Year <= 2031, "decline", period),
+    period = ifelse(Year > 2031, "low", period),
+    period = ifelse(Year < 1965, "init", period)) %>%
     group_by(period) %>% summarise(mean = mean(Value), min = min(Value), max = max(Value))
 
 # # Adjust decline multiplier
@@ -108,62 +143,36 @@ mutate(Year = as.numeric(Year),
 #     decline_multiplier <- decline_multiplier * 0.9
 # }
 
-reptest_rec <- reptest$derived_quants %>% filter(str_detect(Label, "Rec")) %>%
-separate(col = Label, into = c("Recr", "Year"), sep = "_") %>%
-mutate(Year = as.numeric(Year)) %>% filter(!is.na(Year))
-
-plot(rec$Year, y = rec$SR_rec, type = "l", col = "orange", xlim = c(1,100), ylim = c(0,800))
-abline(h = 187.0477, col = "darkblue", lty = 2) #mean Rec
-abline(h = 167.6124, col = "darkorange", lty = 2) #mean SR recruitment
-abline(h = 100.5674, col = "red4", lty = 2) #reduced by 40% mean SR recruitment
-lines(rec$Year, y = rec$Rec, col = "blue")
-lines(rec$Year, y = rec$Calc_rec, col = "blue", lty = 2)
-lines(76:100, y = extended_dec_vec, col = "red", lty = 3, lwd = 1.5)
-#lines(86:100, y = extended_dec_vec, col = "red", lty = 3, lwd = 1.5)
-lines(1:100, y = reptest_rec$Value, col = "red")
 
 ```
 
 #### Rec dev matrix
 
-Create 100 rec dev trajectories for 75 years, with added variability (sigmaR = .15) in the last 10 years. The first 65 years will follow the recruitment deviations that came out of the assessment model to retain any sort of environmental signal it may have picked up on.
+Create 100 rec dev trajectories for 75 years. The first 15 years have no recdevs (same as the original model) and the remaining 60 years will follow the recruitment deviations pattern that came out of the assessment model to retain any sort of environmental signal it may have picked up on (sd 0.1).
 
 ```{r}
 set.seed(1234)
 plot(x = recdevs_df$year, y = recdevs_df$Value, type = "l")
-sigmar <- .15 #.657 from opaka model
-new_recdevs <- matrix(data = NA, nrow = nrow(recdevs_df)+1, ncol = 100)
-recdevs <- matrix(data = NA, nrow = nrow(recdevs_df)+1, ncol = 100)
-new_recdevs[1,] <- 0
-for(i in 2:nrow(new_recdevs)){
-    if(i < 60){
+new_recdevs <- matrix(data = 0, nrow = nrow(recdevs_df), ncol = 100)
+
+for(i in 1:nrow(new_recdevs)){
+    if(i > 17){
         sample_sd <- .01
-        # new_recdevs[i,] <- faux::rnorm_multi(n = 100, ## year vector
-        #                          vars = 1,
-        #                          mu = recdevs_df$Value[i-1],
-        #                          r = 0.5, #correlation
-        #                          sd = sample_sd)[,1]
-        
-        new_recdevs[i,] <- rnorm(n = 100, mean = recdevs_df$Value[i-1], sd = .01)  
-        # new_recdevs[i,] <- sigmar * recdevs[i,] - sigmar^2 / 2
+        new_recdevs[i,] <- rnorm(n = 100, mean = recdevs_df$Value[i], sd = .1)  
 
-
-    }else{
-        recdevs[i,] <- rnorm(n = 100, mean = 0, sd = 1)  
-        new_recdevs[i,] <- sigmar * recdevs[i,] - sigmar^2 / 2 
     }
-
-
 }
 matplot(new_recdevs, type = "l")
 ```
 
-Then we add 25 years of assumed "normal" future recruitment, with the same variaiblity as the last 10 years of the historical recdevs (sigmaR = 0.15).
+Then we add 25 years of assumed "normal" future recruitment, with the same variaiblity as stock assessment (sigmaR = 0.52).
 
 ```{r}
-future_recdevs <- matrix(data = NA, nrow = 50, ncol = 100)
+sigmar <- .52 #.52 from opaka model
+
+future_recdevs <- matrix(data = NA, nrow = 25, ncol = 100)
 for(i in 1:nrow(future_recdevs)){ 
-    recdevs <- rnorm(n = 100, mean = 0, sd = 1)   
+    recdevs <- rnorm(n = 100, mean = 0, sd = .5)   
     future_recdevs[i,] <- sigmar * recdevs - sigmar^2 / 2 
 }
 matplot(y = future_recdevs, type = "l")
@@ -177,6 +186,8 @@ matplot(y = full_recdevs, type = "l")
 We also create 25 years of "poor" future recruitment. Using the full_recdevs, 100 OM and EMs were generated and the results were aggregated using the `get_results_all` function for that scenario (read in as `lrf` in code chunk below). The recruitment in year 75 for each iteration (should be the same across scenarios for the same iteration) was taken and then a trajectory was created that brought that value down to the calculated 40% reduced mean recruitment. Those values were randomly sampled with a sd of `sigmaR` to add noise and those recdevs were added to the `new_recdevs` to create a second matrix, with poor recruitment values.  
 
 ```{r}
+
+sigma_r <- .52
 # Empty matrix to store rec devs
 poor_recdevs <- matrix(NA, nrow = length(total_multiplier), ncol = 100)
 
@@ -200,19 +211,22 @@ abline(v = 75)
 ```
 
 ## Simulating F trajectory
-We simulated 100 stochastic F time series, based on the true time series of F for the commercial and non commercial fleets estimated in the original Opakapaka assessment model. For the 25 years in the future, we used an average F value from the terminal 5 years. F values also had fairly strong temporal autocorrelation (0.7) which makes sense because management is consistent over 3-5 years of time and you would not expect fishing pressure to change drastically from year to year randomly. For non-commercial F, after year 2004, we calculated it as a ratio of 1.03 to commercial F, as is done in the most recent assessment. 
+We simulated 200 stochastic F time series, following the same general pattern of the historical time series of F for the commercial and non commercial fleets estimated in the original Opakapaka assessment model. For the 25 years in the future, we used an average F value from the terminal 5 years. F values also had fairly strong temporal autocorrelation (0.7) which makes sense because management is consistent over 3-5 years of time and you would not expect fishing pressure to change drastically from year to year randomly. For non-commercial F, after year 2004, we calculated it as a ratio of 1.03 to commercial F, as is done in the most recent assessment. 
 ```{r}
+
+#simple_F.csv was created by taking the original F time series and simplifying it so that the trend matched the general shape (up, constant, down, constant) but was simplified so that the values were means of each period of time.
+F_df <- read.csv("Inputs/simple_F.csv")
 
 # Get the mean F of last 5 years from Opaka assessment
 mean_F <- F_df %>% 
   slice((n()-4):n()) %>%
   summarise(mean_FRS = mean(FRS), 
-            mean_Non_comm = mean(Non_comm))
+            mean_Non_comm = mean(Noncomm))
 
 FRS_mu_ts <- c(F_df$FRS[-1], rep(mean_F$mean_FRS, 25))
-NC_mu_tcs <- c(F_df$Non_comm[-1], rep(mean_F$mean_Non_comm, 25))
+NC_mu_tcs <- c(F_df$Noncomm[-1], rep(mean_F$mean_Non_comm, 25))
 
-n_sims <- 100
+n_sims <- 200
 temporal_cor <- 0.7
 # Function to calculate temporally correlated F values based on a time series of "true" F values 
 calculate_F <- function(n_sims, n_years, mu_ts, temporal_cor){
@@ -233,28 +247,32 @@ calculate_F <- function(n_sims, n_years, mu_ts, temporal_cor){
   return(F_df)
 }
 
-F_comm_df <- calculate_F(n_sims = 100, n_years = 100, mu_ts = FRS_mu_ts, temporal_cor)
+F_comm_df <- calculate_F(n_sims = 200, n_years = 100, mu_ts = FRS_mu_ts, temporal_cor)
 matplot(y = F_comm_df, type = "l", lty = 1, lwd = 1.2)
 
-F_noncomm_df <- calculate_F(n_sims = 100, n_years = 55, mu_ts = NC_mu_ts[1:75], temporal_cor)
+F_noncomm_df <- calculate_F(n_sims = 200, n_years = 55, mu_ts = NC_mu_tcs[1:75], temporal_cor)
 F_noncomm_df <- rbind(F_noncomm_df, (F_comm_df[56:100,]*1.03))
 matplot(y = F_noncomm_df, type = "l", lty = 1, lwd = 1.2)
 
 plot(x = 1:100, y = F_comm_df[,1], type = "l")
 lines(x = 1:100, y = F_noncomm_df[,1], col = "red")
-#simpler way of generating F's keeping first 75 years exact same as opaka model, then random based on terminal year F (future_cf code removed).
-#does not include any correlation between years or series
-# F_comm_mod <- rep$exploitation$Comm[-1]
-#F_comm_df <- matrix(data = rep(F_comm_mod, 100), nrow = 75, ncol = 100,byrow = F)
-#F_comm_df <- rbind(F_comm_df, future_cf)
-# F_noncomm_mod <- rep$exploitation$Non_comm[-1]
-#F_noncomm_df <- matrix(data = rep(F_noncomm_mod, 100), nrow = 75, ncol = 100,byrow = F)
-#F_noncomm_df <- rbind(F_noncomm_df, future_cf * 1.03)
 
 # Save output 
 # save(list = c("F_noncomm_df", "F_comm_df"), file = file.path(main.dir, "Inputs", "constantF_mat.RData"))
 
 ```
+
+### Get effective sample sizes for FRS length data 
+
+```{r}
+#| eval: false
+
+#effN is used for length comp data for FRS
+effN <- rep$sizedbase %>% filter(Fleet == 1) %>% group_by(Yr) %>% distinct(effN) 
+write.csv(effN, file.path(main.dir, "Inputs", "effN.csv"))
+
+```
+
 
 ### Load already created RecDev and F vectors
 
@@ -270,23 +288,22 @@ load(file.path(main.dir, "Inputs", "constantF_mat.RData"))
 
 library(fs)
 
-scen <- "HRF_SQ"
+scen <- "FRSonly_SQ"
 nyears_fwd <- 25
-niter <- 100
+niter <- 200
 scen_dirs <- file.path(main.dir, paste(scen, nyears_fwd, "yrfwd", sep = "_"), 1:niter)
 sapply(scen_dirs, dir.create, recursive = T)
 # file.copy(from = file.path(main.dir, "Inputs", "recdevs_mat.RData"), file.path(scen_dirs, "recdevs_mat.RData"))
 # file.copy(from = file.path(main.dir, "Inputs", "poor_recdevs_mat.RData"), file.path(scen_dirs, "poor_recdevs_mat.RData"))
 file.copy(from = file.path(main.dir, "Inputs", "setseed.csv"), file.path(scen_dirs, "setseed.csv"))
 file.copy(from = file.path(main.dir, "Inputs", "sas.csv"), file.path(scen_dirs, "sas.csv"))
-file.copy(from = file.path(main.dir, "Inputs", "F_df.csv"), file.path(scen_dirs, "F_df.csv"))
-file.copy(from = file.path(main.dir, "Inputs", "recdev_df.csv"), file.path(scen_dirs, "recdev_df.csv"))
+file.copy(from = file.path(main.dir, "Inputs", "constantF_mat.RData"), file.path(scen_dirs, "constantF_mat.RData"))
 file.copy(from = file.path(main.dir, "Inputs", "effN.csv"), file.path(scen_dirs, "effN.csv"))
-# file.copy(from = file.path(main.dir, "Inputs", "constantF_mat.RData"), file.path(scen_dirs, "constantF_mat.RData"))
+# file.copy(from = file.path(main.dir, "Inputs", "simple_F.csv"), file.path(scen_dirs, "simple_F.csv"))
 
 for(i in 1:length(scen_dirs)){
-    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-om", nyears_fwd)), scen_dirs[i]) #"-FRS-only" #, "-selex" , "-R0_trend"
-    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-em", nyears_fwd)), scen_dirs[i])
+    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-om-", nyears_fwd, "-FRS-only")), scen_dirs[i]) #"-FRS-only" #, "-selex" , "-R0_trend", "_FRSlencomp"
+    fs::dir_copy(file.path(main.dir, "models", paste0("opaka-em-", nyears_fwd, "-FRS-only")), scen_dirs[i])
 }
 # only for FRS_only_poorrec_25_yrfwd scenario (testing hyperstablity)
 # for(i in 1:length(scen_dirs)){
@@ -301,9 +318,9 @@ for(i in 1:length(scen_dirs)){
     unlink(files_clean, recursive = T)
 }
 
-target_dirs <- paste0(scen, "/", 1:niter)
-writeLines(target_dirs, file.path(main.dir, scen, "target_dirs.txt"))
-shell(paste0("powershell cd ", main.dir, ";tar -czf upload.", scen, "_.tar.gz ", scen))
+target_dirs <- paste0(paste(scen, nyears_fwd, "yrfwd", sep = "_"), "/",  1:niter)
+writeLines(target_dirs, file.path(main.dir, paste(scen, nyears_fwd, "yrfwd", sep = "_"), "target_dirs.txt"))
+shell(paste0("powershell cd ", main.dir, ";tar -czf upload.", paste(scen, nyears_fwd, "yrfwd", sep = "_"), ".tar.gz ", paste(scen, nyears_fwd, "yrfwd", sep = "_")))
 #upload these files to OSG 
 ```
 
@@ -324,21 +341,21 @@ for(i in 1:length(all_scenario_names)){
                     missing_vec <- c(missing_vec, paste0(all_scenario_names[i], y))
                 } 
             }
-    }else{
-        next
-    }
+#     }else{
+#         next
+#     }
 
-}
+# }
 
 get_results_all(
     overwrite_files = T,
-    user_scenarios =  all_scenario_names[i],
-    filename_prefix = "hrf_sq"
+    user_scenarios =  all_scenario_names,
+    filename_prefix = "hrf_rebuild_sigmar52_rec2"
 )   
 get_fits_all(
     overwrite_files = T,
     user_scenarios = all_scenario_names[i],
-    filename_prefix = "hrf_sq"
+    filename_prefix = "hrf_lrf"
 )
 
 ```
@@ -348,172 +365,81 @@ get_fits_all(
 ```{r}
 
 reps <- SSgetoutput(dirvec = c(
-# file.path(main.dir, "HRF_SQ_25_yrfwd", "10", "om"),
-# file.path(main.dir, "HRF_SQ_25_yrfwd", "10", "em"),
-# file.path(main.dir, "HRF_SQ_25_yrfwd", "20", "om"),
-# file.path(main.dir, "HRF_SQ_25_yrfwd", "20", "em"),
-file.path(main.dir, "HRF_SQ", "1", "om"),
-file.path(main.dir, "HRF_SQ", "1", "em"), 
-file.path(main.dir, "HRF_SQ", "2", "om"),
-file.path(main.dir, "HRF_SQ", "2", "em"), 
-file.path(main.dir, "HRF_SQ", "3", "om"),
-file.path(main.dir, "HRF_SQ", "3", "em"), 
-file.path(main.dir, "HRF_SQ", "4", "om"),
-file.path(main.dir, "HRF_SQ", "4", "em"), 
-file.path(main.dir, "HRF_SQ", "5", "om"),
-file.path(main.dir, "HRF_SQ", "5", "em") 
+# file.path(main.dir, "HRF_poorrec_25_yrfwd", "2", "om"),
+# file.path(main.dir, "HRF_poorrec_25_yrfwd", "2", "em"),
+file.path(main.dir, "HRF_SQ_rebuild_sigmar52_25_yrfwd", "1", "om"),
+file.path(main.dir, "HRF_SQ_rebuild_sigmar52_25_yrfwd", "2", "om"),
+file.path(main.dir, "HRF_SQ_rebuild_sigmar52_25_yrfwd", "3", "om"),
+file.path(main.dir, "HRF_SQ_rebuild_sigmar52_25_yrfwd", "1", "em"),
+file.path(main.dir, "HRF_SQ_rebuild_sigmar52_25_yrfwd", "2", "em"),
+file.path(main.dir, "HRF_SQ_rebuild_sigmar52_25_yrfwd", "3", "em"),
+file.path(main.dir, "HRF_SQ_rebuild_sigmar52_rec2_25_yrfwd", "1", "om"),
+file.path(main.dir, "HRF_SQ_rebuild_sigmar52_rec2_25_yrfwd", "2", "om"),
+file.path(main.dir, "HRF_SQ_rebuild_sigmar52_rec2_25_yrfwd", "3", "om"),
+file.path(main.dir, "HRF_SQ_rebuild_sigmar52_rec2_25_yrfwd", "1", "em"),
+file.path(main.dir, "HRF_SQ_rebuild_sigmar52_rec2_25_yrfwd", "2", "em"),
+file.path(main.dir, "HRF_SQ_rebuild_sigmar52_rec2_25_yrfwd", "3", "em"),
+file.path(main.dir, "HRF_SQ_rebuild_sigmar52_25_yrfwd", "188", "om"),
+file.path(main.dir, "HRF_SQ_rebuild_sigmar52_25_yrfwd", "188", "em"),
+file.path(main.dir, "HRF_SQ_rebuild_sigmar52_rec2_25_yrfwd", "188", "om"),
+file.path(main.dir, "HRF_SQ_rebuild_sigmar52_rec2_25_yrfwd", "188", "em")
+# file.path(main.dir, "HRF_SQ_rebuild_relax", "9", "om"),
+# file.path(main.dir, "HRF_SQ_rebuild_relax", "9", "em")
+# file.path(main.dir, "LRF_poorrec_rec3", "6", "om"),
+# file.path(main.dir, "LRF_poorrec_rec3", "6", "em")
 ))
 
 reps_sum <- SSsummarize(reps)
-SSplotComparisons(reps_sum, col = c(1,2))
+#reps_sum <- SSsummarize(reps)
+SSplotComparisons(reps_sum, col = c(1,2,3), models = c(13,14,16), uncertainty = F)
+SSplotComparisons(reps_sum3, col = c(1,2), models = c(3,4), uncertainty = F)
 SSplotComparisons(reps_sum, legendlabels = c("prOM", "prEM"),  models = c(3,4), uncertainty = F)
-SS_plots(reps$replist2)
-SSplotRecdevs(reps$replist2)
-bias <- SS_fitbiasramp(reps$replist2)
-
-rep <- SS_output(file.path(main.dir, "models", "opaka-em-25"))
-SS_plots(rep)
-
-reps_sum$SpawnBio %>% mutate(re = (replist2-replist1)/replist1) %>% filter(Yr > 0) %>% ggplot(aes(x = Yr, y = re)) + geom_line() + geom_hline(yintercept = 0)
-
-reps_sum$Fvalue %>% mutate(re = (replist2-replist1)/replist1) %>% filter(Yr > 0)%>% summarise(min = min(re), max = max(re))
-reps_sum$recruits %>% mutate(re = (replist2-replist1)/replist1) %>% filter(Yr > 0) %>% summarise(min = min(re), max = max(re))
-
-ssb_re_original <- ts_re %>% 
-filter(scenario == "HRF_SQ_25_yrfwd" & iteration <= 10) %>% 
-select(year, SpawnBio_re, iteration, scenario) %>% 
-filter(year <= 100) %>% 
-group_by(year) %>% 
-summarise(mean = mean(SpawnBio_re))
-
-ssb_re_new <- ts_re %>% 
-filter(scenario == "HRF_SQ_25_yrfwd" & iteration <= 10) %>% 
-select(year, SpawnBio_re, iteration, scenario) %>% 
-filter(year <= 100) %>% 
-group_by(year) %>% 
-summarise(mean = mean(SpawnBio_re))
-
-ssb_re_new_100 <- ts_re %>% 
-#filter(scenario == "HRF_SQ_25_yrfwd") %>% 
-select(year, SpawnBio_re, iteration, scenario) %>% 
-filter(year <= 2023) %>% 
-group_by(year) %>% 
-summarise(mean = mean(SpawnBio_re),
-median = quantile(SpawnBio_re, .5))
-
-
-# Filter for the last year and calculate cumulative mean
-cumulative_means <- ts_re %>%
-  filter(year == 100) %>%
-  arrange(iteration) %>%  # Make sure iterations are in order
-  mutate(
-    cumulative_mean = cumsum(SpawnBio_re) / row_number(),
-    n_iterations = row_number()
-  )
-
-# Plot the results
-ggplot(cumulative_means, aes(x = n_iterations, y = cumulative_mean)) +
-  geom_line(size = 1) +
-  geom_point(alpha = 0.6) +
-  labs(
-    x = "Number of Iterations",
-    y = "Mean SpawnBio_re",
-    title = "Convergence of Mean SpawnBio_re with Increasing Iterations",
-    subtitle = "Year 100"
-  ) +
-  theme_minimal()
-
-ssb_re_new_100 %>% ggplot(aes(x = year, y = mean)) + geom_line() + geom_hline(yintercept = 0) +
-#geom_line(data = ssb_re_new, aes(x = year, y = mean), color = "blue") + 
-geom_line(data = ssb_re_new_100, aes(x = year, y = mean), color = "red") +
-geom_line(data = ssb_re_new_100, aes(x = year, y = median), color = "blue") 
-
-colnames(reps_sum$SpawnBio) <- c("om_1", "em_1", "om_2", "em_2", "om_3", "em_3", "om_4", "em_4","om_5", "em_5", "label", "year")
-
-results_ts %>% select(SpawnBio, year, model_run, iteration) %>% 
-pivot_wider(names_from = model_run, values_from = SpawnBio) %>% 
-mutate(re = (em-om)/om) %>%
-  filter(year > 0 & year < 101) %>%
-  group_by(year) %>%
-  summarise(mean = mean(re), 
-  uci = quantile(re, .975), lci = quantile(re, .05))
-
-
-sim_re <- ts_re %>% filter(year > 0 & year < 101) %>% group_by(year) %>%
-  summarise(mean = mean(SpawnBio_re), 
-  uci = quantile(SpawnBio_re, .975), lci = quantile(SpawnBio_re, .05))
-
-reps_sum$SpawnBio %>%
-pivot_longer(
-    cols = matches("^(om|em)_\\d+$"),  # only columns matching the pattern
-    names_to = c("method", "number"),
-    names_pattern = "(.+)_(.+)",
-    values_to = "value"
-  ) %>%
-  pivot_wider(
-    names_from = method,
-    values_from = value
-  ) %>% 
-  mutate(re = (em-om)/om) %>%
-  filter(year > 0 & year < 101) %>%
-  group_by(year) %>%
-  summarise(mean = mean(re), 
-  uci = quantile(re, .975), lci = quantile(re, .05)) %>% 
-  ggplot(aes(x = year)) + 
-  geom_line(aes(y = mean)) + 
-  geom_hline(yintercept = 0) 
-  geom_line(data = sim_re, aes(x = year, y = mean), color = "blue")
-
-reps$replist1$derived_quants %>% filter(str_detect(Label, "Rec")) %>%
-separate(col = Label, into = c("Recr", "Year"), sep = "_") %>%
-mutate(Year = as.numeric(Year),
-    period = ifelse(Year <=75, "early", "late"),
-    period = ifelse(Year >75 & Year <=85, "decline", period),
-    period = ifelse(is.na(Year), "init", period)) %>%
-    group_by(period) %>% summarise(mean = mean(Value), min = min(Value), max = max(Value))
-
-rep <- SS_output(file.path(main.dir, "HRF_poorrec_perfectdata_25_yrfwd/9/em"))
-SS_plots(rep)
-
-ssb_msy <- rep$derived_quants %>% filter(str_detect(Label, "SSB_MSY")) %>% pull(Value) 
-.865*ssb_msy
-rep$exploitation
-
-
-reps_sum <- SSsummarize(reps)
-#SSplotComparisons(reps_sum, legendlabels = c("HRF_om", "HRF_em", "LRF_om", "LRF_em"))  print = TRUE, png = TRUE, plotdir = file.path(main.dir, "HRF_test", "2")
-SSplotComparisons(reps_sum, legendlabels = c("om1", "em1", "om10", "em10"))
 SS_plots(reps$replist1)
-SS_plots(reps$replist2)
-SS_plots(reps$replist3)
 
-reps_sum$maxgrad
-reps$replist2$breakpoints_for_bias_adjustment_ramp
-new_bias <- SS_fitbiasramp(reps$replist4)
 
-reps_sum$indices %>% filter(Fleet == 3) %>% #filter(name == "replist1" | name == "replist2") %>%
-mutate(name = recode(name, 
-                    replist1 = "om_1", 
-                    replist2 = "em_1", 
-                    replist3 = "om_2",
-                    replist4 = "em_2",
-                    replist5 = "om_3",
-                    replist6 = "em_3",
-                    replist7 = "om_4",
-                    replist8 = "em_4",
-                    replist9 = "om_5",
-                    replist10 = "em_5"
-                    )) %>%
-separate(name, sep = "_", into = c("mod_type", "rep")) %>%
-ggplot(aes(x = Yr)) +
-geom_point(data = . %>% filter(mod_type == "om"), aes(y = Exp, color = mod_type)) + 
-geom_point(data = . %>% filter(mod_type == "em"), aes(y = Obs, color = mod_type)) + 
-geom_line(data = . %>% filter(mod_type == "em"), aes(y = Exp, color = mod_type), linewidth = 1.5) +
-facet_wrap(~rep) +
-labs(x = "Year", y = "BFISH Index") + 
-theme_classic() +
-theme(legend.position = "top",
-legend.text = element_text(size = 12))
+rep48 <- SSgetoutput(dirvec = c(
+file.path(main.dir, "HRF_poorrec_25_yrfwd", "48", "om"),
+file.path(main.dir, "HRF_poorrec_25_yrfwd", "48", "em")
+))
+rep48_sum <- SSsummarize(rep48)
+SSplotComparisons(rep48_sum)
+SS_plots(rep)
+reps_sum$recruits
+reps_sum$Fvalue
+plot(x = reps_sum3$Fvalue$Yr, y = reps_sum3$Fvalue$replist1, type = "l")
+lines(x = reps_sum$Fvalue$Yr, y = reps_sum$Fvalue$replist1, col = "red")
+
+ts_re %>%
+filter(year <= 2048) %>%
+group_by(scenario, year) %>% 
+summarise(med_re = mean(SpawnBio_re),
+uci = quantile(SpawnBio_re, .975),
+lci = quantile(SpawnBio_re, .05)) %>% 
+separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
+remove = F) %>% 
+ggplot() +
+geom_hline(yintercept = 0, color = "grey60") +
+geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scen), alpha = .25) + 
+geom_line(aes(x = year, y = med_re, color = scen), linewidth = 1.2) +
+facet_wrap(~ Rec_scenario) + 
+labs(x = "Year", y = "SSB MRE") + 
+theme_bw()
+
+
+good_its <- ts_re %>% filter(year == 2000 & SpawnBio_re < .05 & SpawnBio_re > -0.5) %>% select(iteration, scenario) %>% filter(scenario == "HRF_poorrec_25_yrfwd") %>% pull(iteration)
+
+ts_re %>%
+filter(iteration %in% good_its) %>% filter(year == 2000)
+# group_by(scenario, year) %>%
+# summarise(mean = mean(SpawnBio_re)) %>%
+ggplot() +
+geom_line(aes(x = year, y = SpawnBio_re, group = iteration, color = iteration)) +
+geom_hline(yintercept = 0) +
+facet_wrap(~scenario)
+
+ts_re %>% filter(year == 1965 & SpawnBio_re > .1) %>% select(iteration, scenario)
+
+
 
 ```
 

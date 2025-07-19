@@ -21,7 +21,7 @@ source(file.path(main.dir, "R", "mean_length_fun.r"))
 #| echo: false
 # read in results from simulation runs
 
-files <- list.files(main.dir, pattern = "hrf_sq", full.names = T)
+files <- list.files(main.dir, pattern = "hrf_rebuild_sigmar52_rec2", full.names = T)
 results.list <-  lapply(files, read.csv)
 
 # rename FRS scenarios to match the naming convention of others
@@ -256,11 +256,11 @@ n_iterations
 
 ```{r}
 ts_re %>%
-filter(year <= 2023) %>%
+filter(year <= 2048) %>%
 group_by(scenario, year) %>% 
 summarise(med_re = quantile(SpawnBio_re, .5),
 uci = quantile(SpawnBio_re, .975),
-lci = quantile(SpawnBio_re, .05)) %>% 
+lci = quantile(SpawnBio_re, .05)) %>%
 separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
 remove = F) %>% 
 ggplot() +

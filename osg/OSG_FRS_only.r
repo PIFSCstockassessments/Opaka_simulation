@@ -20,7 +20,7 @@ load("recdevs_mat.RData")
 #Variables
 nyears <- 100
 nyears_fwd <- 25
-scen <- "FRS_only"
+scen <- "FRSonly_SQ"
 
 #Template OM and EM files
 om_dir <- paste0("opaka-om-", nyears_fwd, "-FRS-only", "/")
@@ -33,22 +33,22 @@ sas <- sas_full %>% filter(Scen_name == scen)
 
 # Get F-vector 
     F_list <- list(
-        years = list(1:nyears, 1:nyears),
-        fleets = c(1, 2), 
-        fvals = list(F_comm_df[1:nyears,I], F_noncomm_df[1:nyears,I])
+    years = list(1949:2048, 1949:2048),
+    fleets = c(1, 2),
+    fvals = list(F_comm_df[1:nyears,I], F_noncomm_df[1:nyears,I])
     )
     #create sampling scheme for indices of abundance
     index <- list(
         fleets = c(1), 
-        years = list(seq(1, nyears, by = 1)),
+        years = list(seq(1949, 2048, by = 1)),
         seas = list(7), 
         sds_obs = list(0.2),
-        sds_out = list(0.13) 
+        sds_out = list(0.2) 
     )
 
-    agecomp <- list(
-        fleets = c(1), Nsamp = list(10),
-        years = list(seq(69, 70, by = 1))
+    lcomp <- list(
+    fleets = c(1), Nsamp = list(c(rep(35, 21), effN$effN, rep(90, 25))),
+    years = list(seq(1949, 2048))
     )
     
     seed <- set.seed[I,2]
@@ -58,10 +58,10 @@ sas <- sas_full %>% filter(Scen_name == scen)
         scenarios = paste(scen, nyears_fwd, "yrfwd", sep = "_"), 
         f_params = F_list,
         index_params = index,
-        agecomp_params = agecomp,
+        lcomp_params = lcomp,
         om_dir = file.path(main.dir, "models", om_dir),
         em_dir = file.path(main.dir, "models", em_dir),
-        user_recdevs = full_recdevs,
+        user_recdevs = NULL,
         bias_adjust = T,
         seed = seed
     )
