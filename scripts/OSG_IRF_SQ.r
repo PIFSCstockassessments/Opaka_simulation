@@ -13,18 +13,17 @@ print(args)
 
 set.seed <- read.csv("setseed.csv")
 sas_full <- read.csv("sas.csv")
+effN <- read.csv("effN.csv")
 load("constantF_mat.RData")
-# load("increaseF_mat.RData")
-load("recdevs_mat.RData")
 
 #Variables
 nyears <- 100
 nyears_fwd <- 25
-scen <- "HRF_R0_trend"
+scen <- "IRF_SQ"
 
 #Template OM and EM files
-om_dir <- paste0("opaka-om-", nyears_fwd, "-R0_trend")
-em_dir <- paste0("opaka-em-", nyears_fwd)
+om_dir <- paste0("opaka-om-", nyears_fwd, "_FRSlencomp")
+em_dir <- paste0("opaka-em-", nyears_fwd, "_FRSlencomp")
 
 #Get iteration number
 I <- as.numeric(tail(strsplit(args[1], "/")[[1]], n = 1))
@@ -33,38 +32,38 @@ sas <- sas_full %>% filter(Scen_name == scen)
 
 # Get F-vector 
 F_list <- list(
-    years = list(1:nyears, 1:nyears),
-    fleets = c(1, 2), 
+    years = list(1949:2048, 1949:2048),
+    fleets = c(1, 2),
     fvals = list(F_comm_df[1:nyears,I], F_noncomm_df[1:nyears,I])
 )
 #create sampling scheme for indices of abundance
 index <- list(
-    fleets = c(1, 3), 
-    years = list(seq(1, 75, by = 1), seq(69, nyears, by = 1)),
-    seas = list(7,1), 
-    # sds_out = list(.02, .02),
-    # sds_obs = list(0.01, 0.01)
-    sds_obs = list(0.2, sas[which(sas$N_years == nyears_fwd), "Resfish_sd_obs"]),
-    sds_out = list(0.13, sas[which(sas$N_years == nyears_fwd), "Resfish_index_CV"]) 
- )
+    fleets = c(1, 3),
+    years = list(seq(1949, 2023, by = 1), seq(2017, 2048, by = 1)),
+    seas = list(7,1),
+    sds_out = list(.2, sas[which(sas$N_years == nyears_fwd), "Resfish_index_CV"]),
+    sds_obs = list(0.2, sas[which(sas$N_years == nyears_fwd), "Resfish_index_CV"])
+)
 
 lcomp <- list(
-    fleets = c(3), #Nsamp = list(rep(150, 32)),
-    Nsamp = list(c(rep(30, 7), rep(sas[which(sas$N_years == nyears_fwd), "Neff_len_Resfish"], nyears_fwd))),
-    years = list(seq(69, nyears, by = 1))
+    fleets = c(1,3), 
+    Nsamp = list(c(rep(35, 21), effN$effN), 
+    rep(sas[which(sas$N_years == nyears_fwd), "Neff_len_Resfish"], 7+nyears_fwd)),
+    years = list(seq(1949, 2023), seq(2017, 2048, by = 1))
 )
 
 seed <- set.seed[I,2]
+print(seed)
 
 ss3sim_base(
     iterations = I,
-    scenarios = paste("HRF_R0trend_CVdata", nyears_fwd, "yrfwd", sep = "_"), 
+    scenarios = paste(scen, nyears_fwd, "yrfwd", sep = "_"),
     f_params = F_list,
     index_params = index,
     lcomp_params = lcomp,
     om_dir = om_dir,
     em_dir = em_dir,
-    user_recdevs = full_recdevs,
+    user_recdevs = NULL,
     bias_adjust = T,
     seed = seed
 )

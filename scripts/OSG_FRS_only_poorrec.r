@@ -7,13 +7,14 @@ library(stringr)
 print(getwd())
 
 #get args from Bash environment (for OSG)
-args <- commandArgs(trailingOnly = TRUE) 
+args <- commandArgs(trailingOnly = TRUE)
 print(args) 
 
 set.seed <- read.csv("setseed.csv")
 sas_full <- read.csv("sas.csv")
 effN <- read.csv("effN.csv")
 load("constantF_mat.RData")
+load("poor_recdevs_mat.RData")
 
 #Variables
 nyears <- 100
@@ -58,9 +59,21 @@ F_list <- list(
         lcomp_params = lcomp,
         om_dir = om_dir,
         em_dir = em_dir,
-        user_recdevs = NULL,
+        user_recdevs = full_poor_recdevs,
         bias_adjust = T,
         seed = seed
     )
 
+ if(str_detect(scen, "FRSonly_poorrec")){
+
+        regular_em <- SS_readdat_3.30(file.path("normal_rec.dat"))
+        em_path <- file.path(getwd(), paste(scen, nyears_fwd, "yrfwd", sep = "_"), I, "em")
+        #replace catch and CPUE for commercial fishery
+        em_dat <- SS_readdat_3.30(file = file.path(em_path, "ss3.dat"))
+        em_dat$catch <- regular_em$catch
+        em_dat$CPUE$obs[1:nyears] <- regular_em$CPUE$obs[1:nyears]
+        SS_writedat(em_dat, file.path(em_path, "ss3.dat"), overwrite = T)
+        r4ss::run(dir = em_path, exe = "ss_linux", skipfinished = F, verbose = F)
+
+    }
     

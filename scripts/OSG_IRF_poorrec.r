@@ -7,24 +7,23 @@ library(stringr)
 print(getwd())
 
 #get args from Bash environment (for OSG)
-args <- commandArgs(trailingOnly = TRUE)
-#should be 
+args <- commandArgs(trailingOnly = TRUE) 
 print(args) 
 
 set.seed <- read.csv("setseed.csv")
 sas_full <- read.csv("sas.csv")
 load("constantF_mat.RData")
-# load("increaseF_mat.RData")
 load("poor_recdevs_mat.RData")
+effN <- read.csv("effN.csv")
 
 #Variables
 nyears <- 100
 nyears_fwd <- 25
-scen <- "HRF_poorrec"
+scen <- "IRF_poorrec"
 
 #Template OM and EM files
-om_dir <- paste0("opaka-om-", nyears_fwd)
-em_dir <- paste0("opaka-em-", nyears_fwd)
+om_dir <- paste0("opaka-om-", nyears_fwd, "-r0trend")
+em_dir <- paste0("opaka-em-", nyears_fwd, "-r0trend")
 
 #Get iteration number
 I <- as.numeric(tail(strsplit(args[1], "/")[[1]], n = 1))
@@ -33,31 +32,31 @@ sas <- sas_full %>% filter(Scen_name == scen)
 
 # Get F-vector 
 F_list <- list(
-    years = list(1:nyears, 1:nyears),
+    years = list(1949:2048, 1949:2048),
     fleets = c(1, 2), 
     fvals = list(F_comm_df[1:nyears,I], F_noncomm_df[1:nyears,I])
 )
 #create sampling scheme for indices of abundance
 index <- list(
     fleets = c(1, 3), 
-    years = list(seq(1, 75, by = 1), seq(69, nyears, by = 1)),
+    years = list(seq(1949, 2023, by = 1), seq(2017, 2048, by = 1)),
     seas = list(7,1), 
-    # sds_out = list(.02, .02),
-    # sds_obs = list(0.01, 0.01)
-    sds_obs = list(0.2, sas[which(sas$N_years == nyears_fwd), "Resfish_sd_obs"]),
-    sds_out = list(0.13, sas[which(sas$N_years == nyears_fwd), "Resfish_index_CV"]) 
+    sds_obs = list(0.2, sas[which(sas$N_years == nyears_fwd), "Resfish_index_CV"]),
+    sds_out = list(0.20, sas[which(sas$N_years == nyears_fwd), "Resfish_index_CV"]) 
 )
 
 lcomp <- list(
-    fleets = c(3), Nsamp = list(c(rep(30, 7), rep(sas[which(sas$N_years == nyears_fwd), "Neff_len_Resfish"], nyears_fwd))),
-    years = list(seq(69, nyears, by = 1))
+    fleets = c(1,3), 
+    Nsamp = list(c(rep(35, 21), effN$effN), 
+    rep(sas[which(sas$N_years == nyears_fwd), "Neff_len_Resfish"], 7+nyears_fwd)),
+    years = list(seq(1949, 2023), seq(2017, 2048, by = 1))
 )
 
 seed <- set.seed[I,2]
 
 ss3sim_base(
     iterations = I,
-    scenarios = paste(scen, "CVdata", nyears_fwd, "yrfwd", sep = "_"), 
+    scenarios = paste(scen, nyears_fwd, "yrfwd", sep = "_"), 
     f_params = F_list,
     index_params = index,
     lcomp_params = lcomp,
