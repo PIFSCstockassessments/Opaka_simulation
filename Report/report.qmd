@@ -1,83 +1,300 @@
-# Methods: Recruitment Deviation Time Series Generation
+---
+title: "Opakapaka Simulation Report"
+format: html
+execute: 
+  echo: false
+---
 
-## Overview
-
-We developed stochastic recruitment deviation time series for use in operating model scenarios to evaluate fishery management performance under different recruitment patterns. Two distinct recruitment scenarios were created: (1) normal future recruitment and (2) poor future recruitment representing a 40% decline in mean expected recruitment.
-
-## Historical Recruitment Deviations (Years 1-75)
-
-Historical recruitment deviations were based on estimates from the stock assessment model to preserve potential environmental signals captured during the assessment period. For the first 59 years, recruitment deviations from the assessment were retained with minimal additional variability (σ = 0.01) to maintain historical recruitment patterns while allowing for slight Monte Carlo variation across iterations.
-
-For years 60-75, recruitment deviations were generated using a higher process error (σ_R = 0.15) to reflect increased uncertainty in recent recruitment estimates:
+```{r}
+#| label: setup
+#| include: false
+#| message: false
+#| warning: false
+library(tidyverse)
+library(gt)
+# renv::install("katiejolly/nationalparkcolors")
+library(nationalparkcolors)
+arches_colors <- nationalparkcolors::park_palette(name = "Arches")
 
 ```
-R_dev(y,i) = σ_R × ε(y,i) - σ_R²/2
+
+
+# Introduction  
+ 
+## Background and Context
+
+*  Overview of Opakapaka (Pristipomoides filamentosus) in the Main Hawaiian Islands  
+*  Ecological and economic importance of the fishery
+*  Current management framework and challenges  
+*  Data limitations and uncertainties in current assessments
+*  Recruitment variability and its impact on population dynamics
+*  Challenges specific to deep-water snappers in tropical systems
+
+## Survey Design and Optimization
+
+*  The need for efficient survey design given resource constraints
+*  Trade-offs between survey effort and assessment precision
+*  Importance of understanding survey performance under different scenarios
+
+## Future Uncertainty and Recruitment Scenarios
+
+*  Climate change and environmental variability impacts on recruitment
+*  The need to evaluate survey performance under contrasting future conditions
+*  Why poor recruitment scenarios are particularly important to consider
+
+ The objective of this project is to understand how we optimize an operational fishery-independent survery for Opakapaka in the Main Hawaiian Islands by testing the impact of effort of the survey under two future recruitment scenarios on our ability to estimate key stock quantities such as spawning stock biomass and management reference points. 
+
+# Methods 
+
+## Operating Model  
+
+The operating model was created using a Stock Synthesis (#TODO: ADD CITATON - METHOT and WETZEL) model, conditioned on the trends of historical data available for the Opakapaka stock and Deep 7 fishery. Catch and CPUE data from the commerical and non-commercial fisheries were available for 75 years and index of abundance and length composition data from the Bottomfish Fishery-Independent Survey in Hawaii (BFISH) for seven years. The OM was used to simulate the population dynamics of the stock and data that were sampled with observation error and fit in the estimation model (EM) for 100 years. To generate data for the EM, we ran the OM with a time series fishing mortality and recruitment deviations. We generated 100 time series of fishing mortality based on the trend found in the historical data, low at the start of the fishery, ramp up in the 1970s and remain high until the late 1990s, then decline in the early 2000s and remain constant until the end of the time series. Some variability (standard deviation of 0.002) was introduced to the annual fishing mortality values so that there was some sotchasticity between iterations. Following the approach in the most recent benchmark stock assessment for the Deep 7 fishery, we used a time-varying ratio for the non-commercial catch (#TODO: add citation and ratio values). 
+
+```{r}
+load("../Inputs/constantF_mat.RData")
+
+comm <- F_comm_df %>% 
+as.data.frame() %>% 
+mutate(Year = seq(1949, 2048), 
+Fishery = "Commercial") %>%
+pivot_longer(cols = -c("Year", "Fishery"), values_to = "Fishing Mortality") %>%
+mutate(number = as.numeric(str_remove(name, "V"))) 
+
+noncomm <- F_noncomm_df %>% 
+as.data.frame() %>% 
+mutate(Year = seq(1949, 2048), 
+Fishery = "Non-Commercial") %>%
+pivot_longer(cols = -c("Year", "Fishery"), values_to = "Fishing Mortality") %>%
+mutate(number = as.numeric(str_remove(name, "V"))) 
+
+comm %>% 
+bind_rows(noncomm) %>%
+ggplot(aes(x = Year, y = `Fishing Mortality`)) + 
+geom_line(aes(group = interaction(number, Fishery), color = Fishery), alpha = .65) +
+stockplotr::theme_noaa() +
+scale_colour_discrete(nationalparkcolors::park_palette(
+    name = "Arches"
+  ), name = "Fishery")
+
 ```
 
-where R_dev(y,i) is the recruitment deviation for year y and iteration i, ε(y,i) ~ N(0,1), and the bias correction term (-σ_R²/2) ensures unbiased recruitment in expectation.
+The last 25 years are considered "future years" because they represent possible future recruitment scenarios that we want to test the EM's robustness against. We tested two future recruitment scenarios, the first was a "normal" recruitment, assuming no changes in mean recruitment over time and the second was a "poor recruitment" scenario, which assumed a decline in mean recruitment by 40% in the future. 
 
-## Future Recruitment Scenarios
+### Recruitment Deviation Time Series Generation
 
-### Normal Recruitment Scenario (Years 76-125)
+We developed 100 stochastic recruitment deviation time series for use in the operating models to evaluate fishery management performance under different recruitment patterns. Two distinct recruitment scenarios were created: (1) normal future recruitment and (2) poor future recruitment, represented by a 40% decline in mean expected recruitment. Both scenarios had recruitment deviations generated from a standard normal distribution in log space for the first 75 years. 
+
+Deviations were bias corrected as follows:
+$$
+R_{dev}(y,i) = σ_R × ε(y,i) - \frac{{σ_R}^2}{2}
+$$
+
+
+where $R_{dev}(y,i)$ is the recruitment deviation for year y and iteration i, $ε(y,i) \sim N(0,1)$, and the bias correction term ${σ_R}^2$ ensures unbiased recruitment in expectation. $σ_R$ was 0.52 (#TODO: LH citation). 
+
+### Future Recruitment Scenarios
+
+#### Normal Recruitment Scenario
 
 For the normal recruitment scenario, future recruitment deviations were generated assuming recruitment would continue following the same stochastic process as the final assessment years:
 
+$$
+R_{dev}(y,i) = σ_R × ε(y,i) - \frac{{σ_R}^2}{2}
+$$
+
+where $σ_R$ = 0.15, maintaining consistency with the variability observed in recent years.
+
+#### Declining Recruitment Scenario  
+
+To evaluate the robustness of management strategies under conditions of sustained recruitment failure, we developed a "poor recruitment" scenario characterized by a prolonged decline in recruitment success followed by a period of persistently low recruitment levels.
+
+The recruitment decline scenario was structured as a two-phase process spanning 25 years. The first phase consisted of a 10-year gradual decline period, during which recruitment decreased from baseline levels to 60% of the historical mean. The annual decline rate (*r*) was calculated as:
+$$
+r = (r_{reduced}^(\frac{1}{10})) - 1
+$$
+where *r~reduced~* is the proportion by which the stock was reduced. Because of the non-linear relationship between spawning biomass and recruitment, the reduced level did not actually need to be 60%. We used an iterative process to determine what reduced proportion actually resulted in 60% of the mean recruitment (*r~reduced~* = 0.71). 
+This formulation ensured a smooth exponential decline reaching the target reduction after 10 years. The second phase maintained recruitment at the reduced level (60% of baseline) for an additional 15 years, representing a new regime of lower recruitment conditions.
+
+The baseline recruitment level was established using the mean recruitment from the most recent 15-year period (279.67 individuals), representing contemporary recruitment conditions prior to the simulated decline. 
+
+For the decline phase, annual multipliers were calculated as:
+$$
+M_t = (1 + r)^t
+$$
+
+where *t* represents the ten years of the decline. For the lower recruitment regime period (years 11-25), multipliers were set to *r~reduced~*, maintaining recruitment at 60% of baseline levels.
+
+Projected recruitment levels were converted to recruitment deviations in log-space to maintain consistency with stock assessment model parameterization. Base recruitment deviations were calculated as:
+
+$$
+δ_t = ln(\frac{R_t}{R̄}) - \frac{{σ_R}^2}{2}
+$$
+
+where *R~t~* represents projected recruitment in year *t*, *R̄* is the baseline mean recruitment (279.67), and $σ_R$ is the recruitment variability parameter (0.52). The bias correction term $(σ_R^2 / 2)$ accounts for the Jensen's inequality effect when transforming between arithmetic and log scales.
+
+To incorporate realistic recruitment variability around the deterministic decline trend, we generated 100 Monte Carlo iterations of the poor recruitment scenario. For each iteration, recruitment deviations were modified by adding random noise drawn from a normal distribution with mean = 0 and standard deviation = 0.15. This additional variability was intentionally set smaller than the base recruitment variability ($σ_R$ = 0.52) to ensure the underlying decline signal remained detectable above the noise.
+
+The final recruitment deviations for each iteration *i* were calculated as:
+$$
+δ_{t,i} = δ_t + ε_{t,i}
+$$
+
+where $ε_{t,i} \sim N(0, 0.15²)$.
+
+```{r}
+#| message: false
+#| label: fig-rec_dev
+#| fig-cap: Log recruitment deviations for the normal (blue line) and poor (orange line) recruitment scenarios.
+ ts_df <- read.csv("../all_scens_ts.csv")
+
+ts_df %>%
+filter(model_run == "om" & str_detect(scenario, "IRF_") & iteration == 14) %>%
+mutate(scenario = factor(scenario, levels = c("IRF_SQ_25_yrfwd", "IRF_poorrec_25_yrfwd"))) %>% 
+ggplot() + 
+geom_hline(yintercept = 0, linewidth = 1.2, color = "grey60") +
+geom_line(aes(x = year, y = rec_dev, group = scenario, color = scenario), linewidth = 1.3) +
+labs(x = "Year", y = "Log Recruitment Deviation") + 
+stockplotr::theme_noaa() +
+scale_colour_discrete(nationalparkcolors::park_palette(
+    name = "Arches"
+  ), name = "Recruitment Scenario", labels = c("Normal", "Poor"))
+
+
 ```
-R_dev(y,i) = σ_R × ε(y,i) - σ_R²/2
+
+### Life History
+
+Growth was modeled using a von Bertanlanfy growth curve and natural mortality was assumed to be 0.135 and age-invariant. Weight-at-length relationship, maturity and fecundity. The stock-recruitment relationship was modeled with a Beverton-Holt relationship where steepness was fixed at 0.76 and $σ_R$ was 0.52.  
+
+### Initial Fishing Mortality and Selectivity
+
+Initial fishing mortality was fixed at 0.012 for the commerical fishery and assumed to start at equilibrium for the non-commercial fishery. Logistic selectivity was modeled for the commercial and non-commercial fisheries and a dome-shaped double normal selectivity model was used for the research fishing survey. 
+
+![](sel01_multiple_fleets_length1.png)
+
+
+### Data Generation  
+Five sampling scenarios were applied to each recruitment scenario: high survey effort (HSE), intermediate survey effort (ISE), low survey effort (LSE), extra low survey effort (XLSE), and no survey scenario (NSE) (@tbl-sas). The "effort" of the survey was based on the number of sampling grids that would be covered and the approximate resulting uncertainty of the data produced. The number of grids for all scenarios range between 150 (XLSE) to 600 (HSE) and the associated CVs for the index of abundance range from 30% - 15% and the effective sample sizes range from 15 - 60. The CV and effective sample size was assumed to be the same for all years of the survey data. Sampling error (variability in data sampled from the OM) and observation error specified in the EM were the same so there was no misspecification of uncertainty.
+
+```{r}
+#| label: tbl-sas
+#| tbl-cap: "The observational error used to sample data from the OM for high survey effort (HSE), intermediate survey effort (ISE), low survey effort (LSE), extra low survey effort (XLSE), and no survey effort (NSE). For each survey effort, the number of sampling grids (Grids) that effort would translate to, the resulting index of abundance CV, and effective sample size for length composition data are shown. All sampling effort scenarios were run for both normal and poor recrutiment scenarios."
+ 
+sas <- read.csv("sas.csv")
+
+sas %>% 
+select(-c(N_years, F_scen, Resfish_sd_obs, Recruitment)) %>%
+mutate(
+    Scen_name = str_remove(Scen_name, "_SQ"),
+    Scen_name = str_remove(Scen_name, "_poorrec"),
+    N_grids = c(0,0,400,400,560,560,600,600,560,560,150,150)) %>% #TODO: finalize these grid numbers, currently based on "2025_BFISH_R_n_D/03_Outputs/opaka_gridsvsCV.png"
+    filter(str_detect(Scen_name, "Selex", negate = TRUE)) %>%
+distinct(Scen_name, .keep_all = T) %>%
+select(Scen_name, N_grids, Resfish_index_CV, Neff_len_Resfish) %>%
+gt() %>%
+tab_header(
+    title = "Sampling Scenarios"
+) %>% 
+cols_label(
+    Scen_name = "Sampling Effort", 
+    N_grids = "Grids",
+    Resfish_index_CV = "CV", 
+    Neff_len_Resfish = "effN"
+) %>%
+  opt_stylize(style = 1) 
 ```
 
-where σ_R = 0.15, maintaining consistency with the variability observed in recent years.
+## Estimation Model  
+Data generated from the OM were fit using a catch-at-age model in Stock Synthesis. All life history and fishery relationships were correctly specified as in the OM. The only difference in the EM from the OM was for the poor recruitment scenarios, a regime time block was added for the last 15 years. Without the regime, the model was unable to fit the persistant decline in recruitment and the relative errors in outputs were over exaggerated. When fitting the model, all parameters were fixed except for R0, the regime parameter for the poor recruitment scenarios, catchability for the commercial and survey fleets, and selectivity parameters for the commercial fishery and survey fleet.
 
-### Poor Recruitment Scenario (Years 76-100)
+#TODO: add ss3sim in somewhere
 
-The poor recruitment scenario was designed to simulate a systematic decline in recruitment over 25 years, reaching 40% below the recent mean by the end of the projection period. This decline was implemented in two phases:
+## Performance Indices  
+To compare the bias and precision of each sampling strategy, we looked at median relative error (MRE) and median absolute relative error (MARE) between the OM and EM for spawning stock biomass (SSB), fishing mortality (F), and reference points \frac{SSB}{SSB~MSST~} and \frac{F}{F~MSY~}. 
 
-**Phase 1: Gradual decline (Years 76-85)**
-A gradual exponential decline was applied over 10 years using a compound decline rate:
+$$
+MRE = median(\frac{EM - OM}{OM})
+$$
+
+$$ 
+MARE = median[abs(\frac{EM - OM}{OM})]
+$$
+
+where EM is the estimated value from the EM and OM is the true value from the OM. 
+
+# Results  
+
+```{r}
+
+#| label: fig-ssbmre
+#| message: false
+#| warning: false
+#| fig-cap: "Timeseries of median (line) and 95% interval (band) relative error of spawning stock biomass for the high (HSE), intermediate (ISE), low (LSE), extra low (XLSE), and no survey effort (NSE) scenarios under both the normal and poor recruitment conditions."
+
+ts_re <- read.csv("ts_re.csv")
+
+ts_re %>%
+filter(year <= 2048 & str_detect(scenario, "Selex", negate = T)) %>%
+group_by(scenario, year) %>% 
+summarise(med_re = quantile(SpawnBio_re, 0.5, na.rm = TRUE),
+uci = quantile(SpawnBio_re, .975, na.rm = TRUE),
+lci = quantile(SpawnBio_re, .05, na.rm = TRUE)) %>%  
+separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
+remove = F) %>% 
+mutate(Rec_scenario = ifelse(Rec_scenario == "poorrec", "Poor Recruitment", "Normal Recruitment")) %>%
+ggplot() +
+geom_hline(yintercept = 0, color = "grey60") +
+geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scen), alpha = .25) + 
+geom_line(aes(x = year, y = med_re, color = scen), linewidth = 1.2) +
+facet_wrap(~ Rec_scenario) + 
+labs(x = "Year", y = "SSB Relative Error") + 
+stockplotr::theme_noaa() +
+  scale_colour_manual(
+    values = arches_colors,
+    name = "Sampling Scenario", 
+    labels = c("NSE", "HSE", "ISE", "LSE", "XLSE")
+  ) +
+  scale_fill_manual(
+    values = arches_colors,
+    name = "Sampling Scenario", 
+    labels = c("NSE", "HSE", "ISE", "LSE", "XLSE")
+  )
 
 ```
-decline_rate = (0.65^(1/10)) - 1 = -0.042 per year
+
+```{r}
+#| label: fig-ssbmare
+#| message: false
+#| warning: false
+#| fig-cap: "Timeseries of median (line) and 95% interval (band) absolute relative error of spawing stock biomass for the high (HSE), intermediate (ISE), low (LSE), extra low (XLSE), and no survey effort (NSE) scenarios under both the normal and poor recruitment conditions."
+
+ts_re %>%
+filter(year <= 2048 & str_detect(scenario, "Selex", negate = T)) %>%
+group_by(scenario, year) %>% 
+summarise(med_re = quantile(abs(SpawnBio_re), 0.5, na.rm = TRUE),
+uci = quantile(abs(SpawnBio_re), .975, na.rm = TRUE),
+lci = quantile(abs(SpawnBio_re), .05, na.rm = TRUE)) %>% 
+separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
+remove = F) %>% 
+mutate(Rec_scenario = ifelse(Rec_scenario == "poorrec", "Poor Recruitment", "Normal Recruitment")) %>%
+ggplot() +
+geom_hline(yintercept = 0, color = "grey60") +
+geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scen), alpha = .25) + 
+geom_line(aes(x = year, y = med_re, color = scen), linewidth = 1.2) +
+facet_wrap(~ Rec_scenario) + 
+labs(x = "Year", y = "SSB Absolute Relative Error") + 
+stockplotr::theme_noaa() +
+  scale_colour_manual(
+    values = arches_colors,
+    name = "Sampling Scenario", 
+    labels = c("NSE", "HSE", "ISE", "LSE", "XLSE")
+  ) +
+  scale_fill_manual(
+    values = arches_colors,
+    name = "Sampling Scenario", 
+    labels = c("NSE", "HSE", "ISE", "LSE", "XLSE")
+  )
+
 ```
 
-The recruitment multiplier for each year t in the decline period was:
-```
-M(t) = (1 + decline_rate)^t
-```
-
-**Phase 2: Constant low recruitment (Years 86-100)**
-Following the decline period, recruitment was maintained at the reduced level:
-```
-M(t) = 0.65
-```
-
-representing 65% of the baseline recruitment (35% decline).
-
-The deterministic recruitment trajectory was calculated as:
-```
-R_expected(y) = R_baseline × M(y)
-```
-
-where R_baseline = 162.4478 represents the mean stock-recruitment curve expectation.
-
-**Stochastic Implementation**
-Base recruitment deviations for the poor scenario were calculated as:
-```
-R_dev_base(y) = log(R_expected(y) / R_baseline) - σ_R²/2
-```
-
-Individual stochastic realizations were generated by adding random variation:
-```
-R_dev(y,i) = R_dev_base(y) + σ_R × ε(y,i)
-```
-
-where σ_R = 0.15 to maintain consistency with recent recruitment variability.
-
-## Monte Carlo Implementation
-
-For each scenario, 100 stochastic recruitment trajectories were generated to capture uncertainty in future recruitment patterns. All trajectories used the same underlying deterministic decline pattern but incorporated independent random deviations to reflect natural recruitment variability.
-
-The recruitment deviation matrices were structured as 125 × 100 (years × iterations), enabling consistent comparison across management procedures while maintaining realistic levels of recruitment uncertainty throughout the projection period.
-
-## Model Integration
-
-The generated recruitment deviation time series were integrated into Stock Synthesis operating models by updating the recruitment deviation input vectors in the control files. This approach maintained the assessment model structure while allowing systematic evaluation of management procedure performance under contrasting recruitment scenarios.
+We found that under normal recrutiment conditions, all sampling strategies were similiarly biased (@fig-ssbmre) and precise (@fig-ssbmare) for SSB. MRE for the terminal year ranged from 2% to 3.6%, and MARE for the terminal year ranged from 5.8% to 10.6%. 

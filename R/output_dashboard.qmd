@@ -4,6 +4,7 @@ format:
     dashboard:
         orientation: rows
         theme: sandstone
+        embed-resources: true
 ---
 
 
@@ -21,17 +22,17 @@ source(file.path(main.dir, "R", "mean_length_fun.r"))
 #| echo: false
 # read in results from simulation runs
 
-files <- list.files(main.dir, pattern = "hrf_rebuild_sigmar52_rec2", full.names = T)
+files <- list.files(main.dir, pattern = "all_scens", full.names = T)
 results.list <-  lapply(files, read.csv)
 
 # rename FRS scenarios to match the naming convention of others
-results.list <- lapply(results.list, function(df){
-    if("scenario" %in% colnames(df)){
-        df$scenario <- gsub("FRS_only_25_yrfwd", "FRSonly_SQ_25_yrfwd", df$scenario)
-        df$scenario <- gsub("FRS_only_poorrec_25_yrfwd", "FRSonly_poorrec_25_yrfwd", df$scenario)
-    }
-    return(df)
-})
+# results.list <- lapply(results.list, function(df){
+#     if("scenario" %in% colnames(df)){
+#         df$scenario <- gsub("IRF_Selex_25_yrfwd", "IRFSelex_SQ_25_yrfwd", df$scenario)
+#         df$scenario <- gsub("IRF_Selex_poorrec_25_yrfwd", "IRFSelex_poorrec_25_yrfwd", df$scenario)
+#     }
+#     return(df)
+# })
 
 #get index of list objects for each type of csv
 scalar.ind <- grep(pattern = "scalar.csv", x = files)
@@ -103,7 +104,7 @@ index_df %>%
 filter(Fleet == 3 & iteration == 1) %>%
 separate(col = scenario, into = c("scenario", "Rec_scenario", "25", "Yrs"), sep = "_") %>% 
 ggplot(aes(x = year)) + 
-geom_vline(xintercept = 75, color = "grey60", linetype = 1) +
+#geom_vline(xintercept = 75, color = "grey60", linetype = 1) +
 geom_line(data = . %>% filter(model_run == "om"), 
         aes(y = Exp, color = "Simulated", linetype = "Simulated")) +
 geom_point(data = . %>% filter(model_run == "em"), 
@@ -140,14 +141,14 @@ title = "Comparison of OM generated data to fit data")
 
 index_df %>% 
 filter(model_run == "em" & Fleet == 3) %>% 
-filter(iteration == 1) %>%
-# filter(str_detect(scenario, "HRF")) %>%
+filter(iteration == 6) %>% 
+#  filter(str_detect(scenario, "XLRF")) %>%
 # filter(str_detect(scenario, "Selex", negate=T)) %>% 
 separate(col = scenario, into = c("scenario", "Rec_scenario", "25", "Yrs"), sep = "_") %>% 
 ggplot(aes(x = year)) + 
-geom_point(aes(y = Obs, group = Rec_scenario, color = Rec_scenario)) +
-geom_line(aes(y = Exp, group = Rec_scenario, color = Rec_scenario)) +
-facet_wrap(~scenario) + 
+geom_point(aes(y = Obs, color = scenario)) +
+geom_line(aes(y = Exp, group = scenario, color = scenario)) +
+facet_wrap(~Rec_scenario) + 
 labs(x = "Year", y = "Index of Abundance", 
 title = "BFISH Index Fit for One Iteration",
 caption = "Points are observed values, lines are expected") +
@@ -255,12 +256,15 @@ n_iterations
 ```
 
 ```{r}
+good_its <- ts_re %>% filter(year == 2015 & SpawnBio_re < .07)
+
 ts_re %>%
 filter(year <= 2048) %>%
+#filter(iteration %in% good_its$iteration) %>%
 group_by(scenario, year) %>% 
-summarise(med_re = quantile(SpawnBio_re, .5),
-uci = quantile(SpawnBio_re, .975),
-lci = quantile(SpawnBio_re, .05)) %>%
+summarise(med_re = mean(SpawnBio_re, na.rm = TRUE),
+uci = quantile(SpawnBio_re, .975, na.rm = TRUE),
+lci = quantile(SpawnBio_re, .05, na.rm = TRUE)) %>% 
 separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
 remove = F) %>% 
 ggplot() +
@@ -293,10 +297,9 @@ theme_bw()
 ```{r}
 ts_re %>%
 group_by(scenario, year) %>% 
-filter(year < 101) %>%
-summarise(med_re = mean(F_1_re), 
-uci = quantile(F_1_re, .95), 
-lci = quantile(F_1_re, .05)) %>% 
+summarise(med_re = mean(F_1_re, na.rm = TRUE), 
+uci = quantile(F_1_re, .95, na.rm = TRUE), 
+lci = quantile(F_1_re, .05, na.rm = TRUE)) %>%
 separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
 remove = F) %>% 
 ggplot() +
@@ -329,7 +332,6 @@ theme_bw()
 #| eval: false
 ts_re %>%
 group_by(scenario, year) %>% 
-filter(year < 101) %>%
 summarise(med_re = quantile(SpawnBio_re, .5)) %>% 
 ggplot() +
 geom_hline(yintercept = 0, color = "grey60") +
@@ -342,7 +344,6 @@ theme_bw()
 #| eval: false
 ts_re %>%
 group_by(scenario, year) %>% 
-filter(year < 101) %>%
 summarise(med_re = quantile(SpawnBio_re, .5)) %>% 
 ggplot() +
 geom_hline(yintercept = 0, color = "grey60") +
@@ -357,7 +358,6 @@ theme_bw()
 ```{r}
 ts_re %>% 
 group_by(scenario, year) %>% 
-filter(year > 1) %>%
 summarise(med_re = quantile(rec_dev_re, .5, na.rm = TRUE),
 uci = quantile(rec_dev_re, .95, na.rm = TRUE),
 lci = quantile(rec_dev_re, .05, na.rm = TRUE)) %>% 
@@ -373,7 +373,7 @@ theme_bw()
 
 ts_re %>% 
 group_by(scenario, year) %>% 
-filter(year > 1) %>%
+
 summarise(med_re = quantile(Recruit_0_re, .5, na.rm = TRUE),
 uci = quantile(Recruit_0_re, .95, na.rm = TRUE),
 lci = quantile(Recruit_0_re, .05, na.rm = TRUE)) %>% 
@@ -417,7 +417,7 @@ scalar_re <- calculate_re(results_scalar)
 
 ref_pt_df <- scalar_df %>% select(scenario, iteration, model_run, SSB_MSY, F_MSY) 
 ref_pt_df <- ts_df %>% 
-filter(year == 100) %>% 
+filter(year == 2048) %>% 
 select(scenario, iteration, model_run, SpawnBio, F_1, F_2) %>% 
 left_join(ref_pt_df, by = c("scenario", "iteration", "model_run")) %>% 
 mutate(annual_F = round(F_1 + F_2, 3),
