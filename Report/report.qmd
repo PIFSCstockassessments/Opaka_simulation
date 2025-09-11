@@ -170,11 +170,35 @@ Growth was modeled using a von Bertanlanfy growth curve and natural mortality wa
 
 Initial fishing mortality was fixed at 0.012 for the commerical fishery and assumed to start at equilibrium for the non-commercial fishery. Logistic selectivity was modeled for the commercial and non-commercial fisheries and a dome-shaped double normal selectivity model was used for the research fishing survey. 
 
-![](sel01_multiple_fleets_length1.png)
+```{r}
+#| warning: false
+#| message: false
+rep <- r4ss::SS_output(dir = "../models/02_Opaka_BFISH_simulation_EM", verbose = F, printstats=FALSE)
+
+rep$sizeselex %>% 
+filter(Yr == 2023 & Factor == "Lsel") %>%
+select(-c("Factor", "Yr", "Sex", "Label")) %>%
+pivot_longer(cols = -Fleet, names_to = "Length", values_to = "Selectivity") %>%
+mutate(Length = as.numeric(Length),
+Fleet = case_when(
+  Fleet == 1 ~ "Commercial",
+  Fleet == 2 ~ "Non Commercial",
+  Fleet == 3 ~ "Survey"
+)) %>%
+ggplot(aes(x = Length, y = Selectivity)) +
+geom_line(aes(color = Fleet), linewidth = 1.5) + 
+stockplotr::theme_noaa() +
+scale_colour_manual(values = nationalparkcolors::park_palette(name = "Arches", n=3)) 
+```
 
 
 ### Data Generation  
-Five sampling scenarios were applied to each recruitment scenario: high survey effort (HSE), intermediate survey effort (ISE), low survey effort (LSE), extra low survey effort (XLSE), and no survey scenario (NSE) (@tbl-sas). The "effort" of the survey was based on the number of sampling grids that would be covered and the approximate resulting uncertainty of the data produced. The number of grids for all scenarios range between 150 (XLSE) to 600 (HSE) and the associated CVs for the index of abundance range from 30% - 15% and the effective sample sizes range from 15 - 60. The CV and effective sample size was assumed to be the same for all years of the survey data. Sampling error (variability in data sampled from the OM) and observation error specified in the EM were the same so there was no misspecification of uncertainty.
+Five sampling scenarios were applied to each recruitment scenario: high survey effort (HSE), intermediate survey effort (ISE), low survey effort (LSE), extra low survey effort (XLSE), and no survey scenario (NSE) (@tbl-sas). The "effort" of the survey was based on the number of sampling grids that would be covered and the approximate resulting uncertainty of the data produced. The number of grids for all scenarios range between 150 (XLSE) to 600 (HSE) and the associated CVs for the index of abundance range from 30% - 15% and the effective sample sizes range from 15 - 60. The CV and effective sample size was assumed to be the same for all years of the survey data. Sampling error (variability in data sampled from the OM) and observation error specified in the EM were the same so there was no misspecification of uncertainty. For all scenarios except the NSE, CPUE and length data from the commercial fishery were no longer included after year 2023 to allow the model to rely entirely on the survey data.
+
+```{r}
+#include figure to show type/amount of data for each scenario
+
+```
 
 ```{r}
 #| label: tbl-sas
@@ -225,26 +249,28 @@ where EM is the estimated value from the EM and OM is the true value from the OM
 # Results  
 
 ```{r}
+ts_re <- read.csv("ts_re.csv")
+```
 
-#| label: fig-ssbmre
+```{r}
+#| label: fig-mre
 #| message: false
 #| warning: false
-#| fig-cap: "Timeseries of median (line) and 95% interval (band) relative error of spawning stock biomass for the high (HSE), intermediate (ISE), low (LSE), extra low (XLSE), and no survey effort (NSE) scenarios under both the normal and poor recruitment conditions."
-
-ts_re <- read.csv("ts_re.csv")
+#| fig-cap: "Timeseries of median (line) and 95% interval (band) absolute relative error of spawing stock biomass for the high (HSE), intermediate (ISE), low (LSE), extra low (XLSE), and no survey effort (NSE) scenarios under both the normal and poor recruitment conditions."
 
 ts_re %>%
 filter(year <= 2048 & str_detect(scenario, "Selex", negate = T)) %>%
 group_by(scenario, year) %>% 
-summarise(med_re = quantile(SpawnBio_re, 0.5, na.rm = TRUE),
-uci = quantile(SpawnBio_re, .975, na.rm = TRUE),
-lci = quantile(SpawnBio_re, .05, na.rm = TRUE)) %>%  
+summarise(med_re = quantile((SpawnBio_re), 0.5, na.rm = TRUE),
+uci = quantile((SpawnBio_re), .975, na.rm = TRUE),
+lci = quantile((SpawnBio_re), .05, na.rm = TRUE)) %>% 
 separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
 remove = F) %>% 
 mutate(Rec_scenario = ifelse(Rec_scenario == "poorrec", "Poor Recruitment", "Normal Recruitment")) %>%
 ggplot() +
 geom_hline(yintercept = 0, color = "grey60") +
-geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scen), alpha = .25) + 
+geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scen, color = scen), 
+alpha = .25, linewidth = .5) + 
 geom_line(aes(x = year, y = med_re, color = scen), linewidth = 1.2) +
 facet_wrap(~ Rec_scenario) + 
 labs(x = "Year", y = "SSB Relative Error") + 
@@ -261,6 +287,7 @@ stockplotr::theme_noaa() +
   )
 
 ```
+
 
 ```{r}
 #| label: fig-ssbmare
@@ -279,7 +306,8 @@ remove = F) %>%
 mutate(Rec_scenario = ifelse(Rec_scenario == "poorrec", "Poor Recruitment", "Normal Recruitment")) %>%
 ggplot() +
 geom_hline(yintercept = 0, color = "grey60") +
-geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scen), alpha = .25) + 
+geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scen, color = scen), 
+alpha = .25, linewidth = .5) + 
 geom_line(aes(x = year, y = med_re, color = scen), linewidth = 1.2) +
 facet_wrap(~ Rec_scenario) + 
 labs(x = "Year", y = "SSB Absolute Relative Error") + 
@@ -297,4 +325,114 @@ stockplotr::theme_noaa() +
 
 ```
 
-We found that under normal recrutiment conditions, all sampling strategies were similiarly biased (@fig-ssbmre) and precise (@fig-ssbmare) for SSB. MRE for the terminal year ranged from 2% to 3.6%, and MARE for the terminal year ranged from 5.8% to 10.6%. 
+```{r}
+#| label: fig-Fmre
+#| message: false
+#| warning: false
+#| fig-cap: "Timeseries of median (line) and 95% interval (band) relative error of fishing mortality for the high (HSE), intermediate (ISE), low (LSE), extra low (XLSE), and no survey effort (NSE) scenarios under both the normal and poor recruitment conditions."
+
+ts_re %>%
+filter(year <= 2048 & str_detect(scenario, "Selex", negate = T)) %>%
+group_by(scenario, year) %>% 
+summarise(med_re = quantile((F_1_re), 0.5, na.rm = TRUE),
+uci = quantile((F_1_re), .975, na.rm = TRUE),
+lci = quantile((F_1_re), .05, na.rm = TRUE)) %>% 
+separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
+remove = F) %>% 
+mutate(Rec_scenario = ifelse(Rec_scenario == "poorrec", "Poor Recruitment", "Normal Recruitment")) %>%
+ggplot() +
+geom_hline(yintercept = 0, color = "grey60") +
+geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scen, color = scen), 
+alpha = .25, linewidth = .5) + 
+geom_line(aes(x = year, y = med_re, color = scen), linewidth = 1.2) +
+facet_wrap(~ Rec_scenario) + 
+labs(x = "Year", y = "F Relative Error") + 
+stockplotr::theme_noaa() +
+  scale_colour_manual(
+    values = arches_colors,
+    name = "Sampling Scenario", 
+    labels = c("NSE", "HSE", "ISE", "LSE", "XLSE")
+  ) +
+  scale_fill_manual(
+    values = arches_colors,
+    name = "Sampling Scenario", 
+    labels = c("NSE", "HSE", "ISE", "LSE", "XLSE")
+  )
+
+```
+
+```{r}
+#| label: fig-Fmare
+#| message: false
+#| warning: false
+#| fig-cap: "Timeseries of median (line) and 95% interval (band) absolute relative error of fishing mortality for the high (HSE), intermediate (ISE), low (LSE), extra low (XLSE), and no survey effort (NSE) scenarios under both the normal and poor recruitment conditions."
+
+ts_re %>%
+filter(year <= 2048 & str_detect(scenario, "Selex", negate = T)) %>%
+group_by(scenario, year) %>% 
+summarise(med_re = quantile(abs(F_1_re), 0.5, na.rm = TRUE),
+uci = quantile(abs(F_1_re), .975, na.rm = TRUE),
+lci = quantile(abs(F_1_re), .05, na.rm = TRUE)) %>% 
+separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
+remove = F) %>% 
+mutate(Rec_scenario = ifelse(Rec_scenario == "poorrec", "Poor Recruitment", "Normal Recruitment")) %>%
+ggplot() +
+geom_hline(yintercept = 0, color = "grey60") +
+geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scen, color = scen), 
+alpha = .25, linewidth = .5) + 
+geom_line(aes(x = year, y = med_re, color = scen), linewidth = 1.2) +
+facet_wrap(~ Rec_scenario) + 
+labs(x = "Year", y = "F Relative Error") + 
+stockplotr::theme_noaa() +
+  scale_colour_manual(
+    values = arches_colors,
+    name = "Sampling Scenario", 
+    labels = c("NSE", "HSE", "ISE", "LSE", "XLSE")
+  ) +
+  scale_fill_manual(
+    values = arches_colors,
+    name = "Sampling Scenario", 
+    labels = c("NSE", "HSE", "ISE", "LSE", "XLSE")
+  )
+
+```
+
+### Normal Recruitment  
+
+We found that under normal recrutiment conditions, all sampling strategies were similiarly biased (@fig-mre) and precise (@fig-ssbmare) for SSB. MRE for the terminal year ranged from 2% to 3.6%, and MARE for the terminal year ranged from 5.8% to 10.6%. Even the scenario where there was no survey effort and just the commercial fishery CPUE and length data, the MRE was slightly smaller than the highest effort scenario. This was likely due to the length of the CPUE time series and the effective sample sizes of the length data from the fishery. We found that fishing mortality also had similar bias (@fig-Fmre) and precision (@fig-Fmare) for all scenarios, however the bias was negative (estimates were slightly under estimated when compared to the true values). Terminal year F MRE ranged between -2.4% and -3.3%. While MRE for all scenarios was similar for SSB and F, the uncertainty increased as the survey effort decreased, except for the NSE scenario which had similar uncertainty to the HSE scenario. The uncertainty also increased for all scenarios except the NSE scenario in the future years. This is likely due to the exclusion of fishery CPUE and length data for these years and the short overlap of time between the survey and fishery data. 
+
+
+```{r}
+#| label: fig-recmare
+#| message: false
+#| warning: false
+#| fig-cap: "Timeseries of median (line) absolute relative error of age-0 recruitment for the high (HSE), intermediate (ISE), low (LSE), extra low (XLSE), and no survey effort (NSE) scenarios under both the normal and poor recruitment conditions."
+
+ts_re %>%
+filter(year <= 2047 & str_detect(scenario, "Selex", negate = T)) %>%
+group_by(scenario, year) %>% 
+summarise(med_re = quantile(abs(Recruit_0_re), 0.5, na.rm = TRUE),
+uci = quantile(abs(Recruit_0_re), .975, na.rm = TRUE),
+lci = quantile(abs(Recruit_0_re), .05, na.rm = TRUE)) %>% 
+separate(col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
+remove = F) %>% 
+mutate(Rec_scenario = ifelse(Rec_scenario == "poorrec", "Poor Recruitment", "Normal Recruitment")) %>%
+ggplot() +
+geom_hline(yintercept = 0, color = "grey60") +
+geom_line(aes(x = year, y = med_re, color = scen), linewidth = 1.2) +
+facet_wrap(~ Rec_scenario) + 
+labs(x = "Year", y = "Median Absolute Recruitment Relative Error") + 
+stockplotr::theme_noaa() +
+  scale_colour_manual(
+    values = arches_colors,
+    name = "Sampling Scenario", 
+    labels = c("NSE", "HSE", "ISE", "LSE", "XLSE")
+  ) +
+  scale_fill_manual(
+    values = arches_colors,
+    name = "Sampling Scenario", 
+    labels = c("NSE", "HSE", "ISE", "LSE", "XLSE")
+  )
+```
+
+For the normal recruitment condition, we found that the HSE and ISE best estimated the true age-0 recruitment of the population over the time series and the XLSE estimated the true age-0 recruitment the worst, particularly in the last few years (@fig-recmare).  
