@@ -14,7 +14,7 @@ library(tidyverse)
 library(gt)
 # renv::install("katiejolly/nationalparkcolors")
 library(nationalparkcolors)
-arches_colors <- nationalparkcolors::park_palette(name = "Arches")
+arches_colors <- nationalparkcolors::park_palette(name = "Arches", n =5)
 
 ```
 
@@ -48,9 +48,12 @@ arches_colors <- nationalparkcolors::park_palette(name = "Arches")
 
 ## Operating Model  
 
-The operating model was created using a Stock Synthesis (#TODO: ADD CITATON - METHOT and WETZEL) model, conditioned on the trends of historical data available for the Opakapaka stock and Deep 7 fishery. Catch and CPUE data from the commerical and non-commercial fisheries were available for 75 years and index of abundance and length composition data from the Bottomfish Fishery-Independent Survey in Hawaii (BFISH) for seven years. The OM was used to simulate the population dynamics of the stock and data that were sampled with observation error and fit in the estimation model (EM) for 100 years. To generate data for the EM, we ran the OM with a time series fishing mortality and recruitment deviations. We generated 100 time series of fishing mortality based on the trend found in the historical data, low at the start of the fishery, ramp up in the 1970s and remain high until the late 1990s, then decline in the early 2000s and remain constant until the end of the time series. Some variability (standard deviation of 0.002) was introduced to the annual fishing mortality values so that there was some sotchasticity between iterations. Following the approach in the most recent benchmark stock assessment for the Deep 7 fishery, we used a time-varying ratio for the non-commercial catch (#TODO: add citation and ratio values). 
+The operating model was created using a Stock Synthesis (#TODO: ADD CITATON - METHOT and WETZEL) model, conditioned on the trends of historical data available for the Opakapaka stock and Deep 7 fishery. Catch and CPUE data from the commerical and non-commercial fisheries were available for 75 years and index of abundance and length composition data from the Bottomfish Fishery-Independent Survey in Hawaii (BFISH) for seven years. The OM was used to simulate the population dynamics of the stock and data that were sampled with observation error and fit in the estimation model (EM) for 100 years. To generate data for the EM, we ran the OM with a time series fishing mortality and recruitment deviations. We generated 100 time series of fishing mortality based on the trend found in the historical data, low at the start of the fishery, ramp up in the 1970s and remain high until the late 1990s, then decline in the early 2000s and remain constant until the end of the time series (@fig-F-timeseries). Some variability (standard deviation of 0.002) was introduced to the annual fishing mortality values so that there was some sotchasticity between iterations. Following the approach in the most recent benchmark stock assessment for the Deep 7 fishery, we used a time-varying ratio for the non-commercial catch (#TODO: add citation and ratio values). 
 
 ```{r}
+#| message: false
+#| label: fig-F-timeseries
+#| fig-cap: Fishing mortality time series for the commercial (blue lines) and non-commercial (orange lines) fisheries.
 load("../Inputs/constantF_mat.RData")
 
 comm <- F_comm_df %>% 
@@ -72,9 +75,10 @@ bind_rows(noncomm) %>%
 ggplot(aes(x = Year, y = `Fishing Mortality`)) + 
 geom_line(aes(group = interaction(number, Fishery), color = Fishery), alpha = .65) +
 stockplotr::theme_noaa() +
-scale_colour_discrete(nationalparkcolors::park_palette(
-    name = "Arches"
-  ), name = "Fishery")
+  scale_colour_manual(
+  values = nationalparkcolors::park_palette(name = "Arches", n=2), 
+  name = "Fishery"
+  ) 
 
 ```
 
@@ -144,7 +148,7 @@ where $ε_{t,i} \sim N(0, 0.15²)$.
 ```{r}
 #| message: false
 #| label: fig-rec_dev
-#| fig-cap: Log recruitment deviations for the normal (blue line) and poor (orange line) recruitment scenarios.
+#| fig-cap: Log recruitment deviations for one iteration used in the normal (blue line) and poor (orange line) recruitment scenarios.
  ts_df <- read.csv("../all_scens_ts.csv")
 
 ts_df %>%
@@ -155,10 +159,10 @@ geom_hline(yintercept = 0, linewidth = 1.2, color = "grey60") +
 geom_line(aes(x = year, y = rec_dev, group = scenario, color = scenario), linewidth = 1.3) +
 labs(x = "Year", y = "Log Recruitment Deviation") + 
 stockplotr::theme_noaa() +
-scale_colour_discrete(nationalparkcolors::park_palette(
-    name = "Arches"
-  ), name = "Recruitment Scenario", labels = c("Normal", "Poor"))
-
+scale_colour_manual(
+  values = nationalparkcolors::park_palette(name = "Arches", n=2), 
+  name = "Recruitment Scenario", labels = c("Normal", "Poor")
+  ) 
 
 ```
 
@@ -247,6 +251,8 @@ $$
 where EM is the estimated value from the EM and OM is the true value from the OM. 
 
 # Results  
+
+Out of 1,000 model runs 8 runs did not converge (maximum gradient was greater than 1e-4). The EM with NSE under poor recruitment conditions had the lowest convergence rate with four iterations that did not converge but overall, model convergence for all sampling scenarios was high. 
 
 ```{r}
 ts_re <- read.csv("ts_re.csv")
@@ -382,7 +388,7 @@ geom_ribbon(aes(x = year, ymin = lci, ymax = uci, fill = scen, color = scen),
 alpha = .25, linewidth = .5) + 
 geom_line(aes(x = year, y = med_re, color = scen), linewidth = 1.2) +
 facet_wrap(~ Rec_scenario) + 
-labs(x = "Year", y = "F Relative Error") + 
+labs(x = "Year", y = "F Absolute Relative Error") + 
 stockplotr::theme_noaa() +
   scale_colour_manual(
     values = arches_colors,
@@ -397,10 +403,13 @@ stockplotr::theme_noaa() +
 
 ```
 
-### Normal Recruitment  
+### Normal Recruitment Conditions 
 
-We found that under normal recrutiment conditions, all sampling strategies were similiarly biased (@fig-mre) and precise (@fig-ssbmare) for SSB. MRE for the terminal year ranged from 2% to 3.6%, and MARE for the terminal year ranged from 5.8% to 10.6%. Even the scenario where there was no survey effort and just the commercial fishery CPUE and length data, the MRE was slightly smaller than the highest effort scenario. This was likely due to the length of the CPUE time series and the effective sample sizes of the length data from the fishery. We found that fishing mortality also had similar bias (@fig-Fmre) and precision (@fig-Fmare) for all scenarios, however the bias was negative (estimates were slightly under estimated when compared to the true values). Terminal year F MRE ranged between -2.4% and -3.3%. While MRE for all scenarios was similar for SSB and F, the uncertainty increased as the survey effort decreased, except for the NSE scenario which had similar uncertainty to the HSE scenario. The uncertainty also increased for all scenarios except the NSE scenario in the future years. This is likely due to the exclusion of fishery CPUE and length data for these years and the short overlap of time between the survey and fishery data. 
+We found that under normal recrutiment conditions, all sampling strategies were similiarly biased (@fig-mre) and precise (@fig-ssbmare) for SSB. MRE for the terminal year ranged from 2% to 3.6%, and MARE for the terminal year ranged from 5.8% to 10.6%. Even the scenario where there was no survey effort and just the commercial fishery CPUE and length data, the MRE was slightly smaller than the highest effort scenario. This was likely due to the length of the CPUE time series and the effective sample sizes of the length data from the fishery. Uncertainty around SSB, particularly in the last 25 years increased with decreasing sampling effort. The XLSE had the largest uncertainty, ranging between -20% and 35% relative error from the true values. This discrepency can have large impacts on reference point estimation.   
 
+We found that fishing mortality also had similar bias (@fig-Fmre) and precision (@fig-Fmare) for all scenarios, however the bias was negative (estimates were slightly under estimated when compared to the true values). Terminal year F MRE ranged between -2.4% and -3.3%. While MRE for all scenarios was similar for SSB and F, the uncertainty increased as the survey effort decreased, except for the NSE scenario which had similar uncertainty to the HSE scenario. The uncertainty also increased for all scenarios except the NSE scenario in the future years. Agaiin, this was likely due to the exclusion of fishery CPUE and length data for those years and the short overlap of time between the survey and fishery data.   
+
+We found that the HSE and ISE best estimated the true age-0 recruitment of the population over the time series and the XLSE estimated the true age-0 recruitment the worst, particularly in the last few years (@fig-recmare). The persistent over estimation of age-0 recruitment for all models helps to explain the positive bias in SSB over time, particularly in the last few years of the simulation.  
 
 ```{r}
 #| label: fig-recmare
@@ -421,7 +430,7 @@ ggplot() +
 geom_hline(yintercept = 0, color = "grey60") +
 geom_line(aes(x = year, y = med_re, color = scen), linewidth = 1.2) +
 facet_wrap(~ Rec_scenario) + 
-labs(x = "Year", y = "Median Absolute Recruitment Relative Error") + 
+labs(x = "Year", y = "Absolute Relative Error of Age-0 Recruitment") + 
 stockplotr::theme_noaa() +
   scale_colour_manual(
     values = arches_colors,
@@ -435,4 +444,56 @@ stockplotr::theme_noaa() +
   )
 ```
 
-For the normal recruitment condition, we found that the HSE and ISE best estimated the true age-0 recruitment of the population over the time series and the XLSE estimated the true age-0 recruitment the worst, particularly in the last few years (@fig-recmare).  
+```{r}
+#| message: false
+#| label: fig-refpoints
+#| fig-cap: Distirbution of relative error for terminal year SSB, spawning stock biomass at minimum stock size threshold (SSB_MSST), the terminal year stock status (SSB/SSB_MSST), terminal year F, FMSY, and terminal year fishing status (F/FMSY). 
+
+ref_pt_re <- read.csv("ref_pt_re.csv")
+
+ref_pt_re %>%
+    select(c(iteration, scenario, SpawnBio_re, bmsst_re, ssb_ssbmsst_re, annual_F_re, F_MSY_re, F_Fmsy_re)) %>%
+    filter(F_MSY_re > -1 & scenario != "IRFSelex_poorrec_25_yrfwd") %>%
+    rename(
+        "iteration" = iteration,
+        "scenario" = scenario,
+        "Terminal~Year~SSB" = SpawnBio_re,
+        "SSB[MSST]" = bmsst_re,
+        "SSB/SSB[MSST]" = ssb_ssbmsst_re,
+        "Terminal~Year~F" = annual_F_re,
+        "F[MSY]" = F_MSY_re,
+        "F/F[MSY]" = F_Fmsy_re
+    ) %>%
+    pivot_longer(cols = -c(iteration, scenario)) %>%
+    separate(
+        col = scenario, into = c("scen", "Rec_scenario", "25", "Yrs"), sep = "_",
+        remove = F
+    ) %>%
+    mutate(
+        name = factor(name,
+            levels = c(
+                "Terminal~Year~SSB", "SSB[MSST]", "SSB/SSB[MSST]",
+                "Terminal~Year~F", "F[MSY]", "F/F[MSY]"
+            )
+        ),
+        Rec_scenario = ifelse(Rec_scenario == "poorrec", "Poor~Recruitment", "Normal~Recruitment")
+    ) %>%
+    ggplot() +
+    geom_boxplot(aes(x = scen, y = value, fill = scen)) +
+    geom_hline(yintercept = 0, color = "grey50", linetype = 2) +
+    facet_grid(Rec_scenario ~ name, scales = "free_y", labeller = label_parsed) +
+    scale_x_discrete(labels = NULL, breaks = NULL) +
+    labs(x = "", y = "Relative Error") +
+    stockplotr::theme_noaa() +
+    scale_fill_manual(
+        values = arches_colors,
+        name = "Sampling Scenario",
+        labels = c("NSE", "HSE", "ISE", "LSE", "XLSE")
+    )
+
+
+```
+
+### Poor Recruitment Conditions 
+
+ When tested under poor recruitment conditions, we found that most models performed similarly in terms of bias and precision for SSB and F, however the MRE and MARE was greater for all models than under normal recruitment scenarios. Terminal SSB MARE ranged from 9.3% to 14% for all models except the NSE. Terminal F MARE ranged from 9.3% to 13% for all models. NSE had a much higher error, 42% MARE for SSB. 
