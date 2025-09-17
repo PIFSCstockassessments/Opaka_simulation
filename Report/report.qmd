@@ -212,12 +212,16 @@ Five sampling scenarios were tested under each recruitment condition: high surve
  
 sas <- read.csv("sas.csv")
 
+CV <- c(.24, .18, .15, .3)
+# equation based on fitting linear regression to Model-based CV for resfish ~ # resfish grids for years 2018-2022
+x <- (CV - 0.4027)/-0.0004
+
 sas %>% 
 select(-c(N_years, F_scen, Resfish_sd_obs, Recruitment)) %>%
 mutate(
     Scen_name = str_remove(Scen_name, "_SQ"),
     Scen_name = str_remove(Scen_name, "_poorrec"),
-    N_grids = c(0,0,400,400,560,560,600,600,560,560,150,150)) %>% #TODO: finalize these grid numbers, currently based on "2025_BFISH_R_n_D/03_Outputs/opaka_gridsvsCV.png"
+    N_grids = c(0,0,407,407,557,557,632,632,557,557,257,257)) %>% 
     filter(str_detect(Scen_name, "Selex", negate = TRUE)) %>%
 distinct(Scen_name, .keep_all = T) %>%
 select(Scen_name, N_grids, Resfish_index_CV, Neff_len_Resfish) %>%
@@ -526,6 +530,7 @@ We found that under poor recruitment conditions, HSE, ISE, and LSE perform simil
 
 When evaluating the performance of estimating stock status reference points, we found that the HSE and ISE scenarios performs the best for terminal year SSB and SSB/SSB~MSSST~ (@fig-refpoints). The median relative errors are closest to 0 for both quantites and the range of uncertainty is the smallest. NSE performs the worst, with the median relative error around 40% for both terminal year SSB and SSB/SSB~MSST~. The range of uncertainty becomes notably wider across sampling scenarios, with the largest range under the NSE scenario. It should be noted though that the true terminal year SSB or SSB/SSB~MSST~ is not recovered for the majority of runs under any scenario (the interquartile range does not include 0). This suggests that under poor recruitment conditions, all of the tested models would provide an overly optimistic view of the stock status. A similar pattern held true for terminal year F and F/F~MSY~ HSE had the smallest range of error and the range become wider as sampling effort decreased, except for the NSE scenario. For fishing mortality based estimates, the NSE scenario performed well. The MRE for both F and F/F~MSY~ was close to 0, and the true F and F/F~MSY~ values were captured within 50% of the runs (0 is included in the interquartile range). However, while that scenario does capture the true value more closely, the trade-off is that the range of error is much wider than any of the other scenarios. This could lead to a greater over estimation of F/F~MSY~ which could have negative impacts on the fishery such as unnecessary reduction in allocations or closures. 
 
+
 # Discussion  
 
 :::{.callout-note icon=false}
@@ -541,22 +546,11 @@ When evaluating the performance of estimating stock status reference points, we 
 
 :::
 
-Poor Recruitment: The failing recruitment scenario reveals the critical importance of adequate sampling:
+In this simulation, we found that if normal recruitment persists in the future, the sampling effort of the fishery independent survey does not impact our ability to estimate the biomass, fishing mortality, and stock status in general, but it does increase our uncertainty around those estimates. On the other hand, we found that if recruitment were to decline in the future and a regime-type shift occurred, the survey effort impacts our ability to estimate biomass, fishing mortality, and stock status and the uncertainty around those estimates as well. Particularly, if there is no fishery-independent survey, our ability to estimate key quantities deteriorates significantly.
 
-Error distributions become notably wider across all sampling scenarios
-The performance gap between HSE and reduced effort scenarios increases substantially
-Assessment uncertainty becomes more pronounced, particularly for fishing mortality estimates
+The poor recruitment scenario served to highlight the importance of maintaining a fishery-independent survey and the level to which sampling effort could be reduced without severely impacting our estimation abilities. HSE and ISE performed similarly in terms of MRE, MARE, and the 95% intervals of relative error. While the LSE and in some cases XLSE performed similarly to HSE and ISE in terms of MARE and MRE, the 95% interval of relative error was much greater for those scenarios. Poor recruitment conditions amplify the negative effects of reduced sampling effort, creating a compounding effect where assessments are least reliable when accurate information is most needed. In order to best support management of the Opakapaka stock, the survey effort should be kept between 560 to 600 grids (#TODO: check on exact number of grids). 
 
-The NSE scenario's intermediate performance suggests that in some cases, no survey data may be preferable to very poor quality survey data, possibly due to reduced model complexity or length of a continuous data sources available to the model. However, this is only true under the normal recruitment conditions and once poor recruitment was introduced the model performed far worse than the others in almost every metric. An additional assumption of the NSE model is that the fishery data, particularly the CPUE and size data are accurately characterizing the full population. This is likely untrue, as fishers are knowledgeable about where and when to find larger fish and will likely be able to maintain a healthy catch even if the population is declining. We cannot assume that the fishery is an accurate, unbaised representation of what is actually happening in the population.  
+One interesting finding was the stark contrast of the NSE scenario performances under the two recruitment conditions. The NSE scenario's performance suggests that in some cases, no survey data may be adequate if the fishery CPUE index is acurately tracking the population trends. Having one continuous data source of good quality may be preferable to shorter time series of data or very poor quality survey data. However, this is only true under the normal recruitment conditions and once poor recruitment was introduced the model performed far worse than the others in almost every metric. A major assumption of the NSE model is that the fishery data, particularly the CPUE and size data are accurately characterizing the full population. This is likely untrue, as fishers are knowledgeable about where and when to find larger fish and will likely be able to maintain a healthy catch even if the population is declining. Therefore, we should not assume that the fishery is an accurate, unbaised representation of what is actually happening in the population.  
 
-Recruitment Scenario Interactions: Poor recruitment conditions amplify the negative effects of reduced sampling effort, creating a compounding effect where assessments are least reliable when accurate information is most needed.
+These results highlight several critical considerations for fishery management. The first is that maintaining adequate survey effort is essential for reliable stock assessments, particularly for fishing mortality estimates used in management decisions. The second is that during periods of recruitment failure, enhanced rather than reduced monitoring may be necessary to maintain assessment reliability. We saw a noticable decrease in our estimation abilities when recruitment was poor and there was a reduced survey effort. Additionally, scientists and managers should account for increased uncertainty in stock status during periods of both poor recruitment and reduced survey effort (even under normal recruitment conditions). Lastly, while reduced survey effort may seem economically attractive, the substantial increases in assessment uncertainty could lead to suboptimal management decisions with significant long-term costs for the fishery.
 
-Management Implications
-These results highlight several critical considerations for fishery management:
-
-Survey Design Priority: Maintaining adequate survey effort is essential for reliable stock assessments, particularly for fishing mortality estimates used in management decisions
-Recruitment Monitoring: During periods of recruitment failure, enhanced rather than reduced monitoring may be necessary to maintain assessment reliability
-Risk Assessment: Managers should account for increased uncertainty in stock status during periods of both poor recruitment and reduced survey effort
-Cost-Benefit Analysis: While reduced survey effort may seem economically attractive, the substantial increases in assessment uncertainty could lead to suboptimal management decisions with significant long-term costs
-
-The simulation demonstrates that survey data quality has cascading effects on stock assessment reliability, with implications extending beyond simple parameter estimation to fundamental management capacity during critical periods.
