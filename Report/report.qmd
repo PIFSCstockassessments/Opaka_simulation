@@ -3,17 +3,17 @@ title: "Opakapaka Simulation Report"
 date: "September 17, 2025"
 date-format: "MMMM D, YYYY"
 
-# Authors and affiliations - try the authors structure instead
 authors:
   - name: "Megumi Oshima, Marc Nadon, John Syslo,<br>Hongguang Ma, Felipe Carvalho"
     affiliation: "Pacific Islands Fisheries Science Center"
 
-# Table of contents and navigation
 toc: true
 toc-title: "Table of contents"
 toc-location: right
 toc-depth: 2
 number-sections: true
+
+bibliography: references.bib
 
 filters:
   - fontawesome 
@@ -44,20 +44,14 @@ arches_colors <- nationalparkcolors::park_palette(name = "Arches", n =5)
 
 # Introduction  
  
-## Background and Context
+The crimson jobfish (*Pristipomoides filamentosus*), locally known as 'ōpakapaka, represents one of Hawaii's most culturally and economically significant deep-water bottomfish species, comprising over 50% of the total Deep-7 bottomfish catch and generating close to $1 million annually in commercial value (Luers et al., 2018). As a slow-growing, long-lived species attaining up to 43 years of age (Andrews et al., 2012) and inhabiting depths of 100-400 meters around the Main Hawaiian Islands (Luers et al., 2018), 'ōpakapaka supports both vital commercial and non-commercial fisheries that are deeply embedded in Hawaiian culture and food security. The species is currently managed under the Western Pacific Regional Fishery Management Council's Hawaii Fishery Ecosystem Plan as part of the Deep-7 bottomfish complex (Western Pacific Regional Fishery Management Council, 2009).
 
-*  Overview of Opakapaka (Pristipomoides filamentosus) in the Main Hawaiian Islands  
-*  Ecological and economic importance of the fishery
-*  Current management framework and challenges  
 *  Data limitations and uncertainties in current assessments
 *  Recruitment variability and its impact on population dynamics
 *  Challenges specific to deep-water snappers in tropical systems
 
-## Survey Design and Optimization
 
-*  The need for efficient survey design given resource constraints
-*  Trade-offs between survey effort and assessment precision
-*  Importance of understanding survey performance under different scenarios
+The Bottomfish Fishery-Independent Survey in Hawai'i (BFISH) uses a stratified-random sampling design to estimate abundance of the Deep 7 bottomfish species, including 'ōpakapaka around the main Hawaiian islands. The survey has been operational since 2016 and historically involved two gear types, a remote stereo-video camera and hook-and-line research fishing. However, due to operational and financial constraints, starting in 2025, the survey only uses the research fishing gear. Sampling is conducted in 500 x 500 m primary sampling unit grids, distributed among the 24 strata types. Catch rate, fish lengths, and life-history information are collected from the individuals caught with research fishing and this data is used to develop an index of relative abundance for each species within the Deep 7 stock and the stock as a whole (#TODO: Ducharme-Barth 2024). The indices of abundance are then used in the stock assessment to inform population trends. Over the years, the number of sampled grids has fluctuated due to logistical or financial constraints. Since the number of grids has a direct impact on the precision of the information derived from the survey, it is crucial to understand the relationship between the number of grids surveyed and the impact that has on quantities estimated from the stock assessment model and used for management. Additionally, understanding the implications of alternative sampling designs may help to design more efficient sampling designs given resource constraints or potential environmental changes. 
 
 ## Future Uncertainty and Recruitment Scenarios
 
@@ -65,13 +59,17 @@ arches_colors <- nationalparkcolors::park_palette(name = "Arches", n =5)
 *  The need to evaluate survey performance under contrasting future conditions
 *  Why poor recruitment scenarios are particularly important to consider
 
- The objective of this project is to understand how we optimize an operational fishery-independent survery for Opakapaka in the Main Hawaiian Islands by testing the impact of effort of the survey under two future recruitment conditions on our ability to estimate key stock quantities such as spawning stock biomass and management reference points. 
+ The objective of this project is to understand how we optimize an operational fishery-independent survey for 'ōpakapaka in the main Hawaiian islands by testing the impact of effort of the survey under two future recruitment conditions on our ability to estimate key stock quantities such as spawning stock biomass and management reference points. 
 
 # Methods 
 
+## Simulation Approach  
+We tested the impact of varying sampling efforts of a fishery-independent survey by simulating abundance trends and data for 'ōpakapaka in the main Hawaiian islands given appropriate process and observational error. We fit the simulated data to an age-structured catch-at-age model and estimated spawning stock biomass, fishing mortality, and management reference points. Both the operating model (OM) and estimation model (EM) were built in Stock Synthesis (@methot_stock_2013) (SS3) and the simulation-estimation process was implemented using *ss3sim* (#TODO: Anderson et al 2013, 2014) in the R statistical software environment (#TODO R Core Team 2013). In total, 1,000 iterations were run using the Open Science Grid (#TODO: add citation). Each run involved (1) generating the population dynamics from the OM, with the given F and recruitment deviations timeseries, (2) sampling data with error from the OM, and (3) fitting those data in an EM. For each run, estimated quantities of interest were compared to the "true" values as calculated by the OM. All code for the analysis is available in the [GitHub repository](https://github.com/PIFSCstockassessments/Opaka_simulation). 
+
 ## Operating Model  
 
-The operating model was created using a Stock Synthesis (#TODO: ADD CITATON - METHOT and WETZEL) model, conditioned on life history of the Opakapaka stock and trends of historical data available for the Deep 7 fishery. Catch, CPUE, and size data from the commerical and non-commercial fisheries were available for 75 years and index of abundance and length composition data from the Bottomfish Fishery-Independent Survey in Hawaii (BFISH) for seven years. The OM was used to simulate the population dynamics of the stock and data that were sampled with observation error and fit in the estimation model (EM) for 100 years. To generate data for the EM, we ran the OM with a time series fishing mortality and recruitment deviations. We generated 100 time series of fishing mortality based on the trend found in the historical data, low at the start of the fishery, ramp up in the 1970s and remain high until the late 1990s, then decline in the early 2000s and remain constant until the end of the time series (@fig-F-timeseries). Some variability (standard deviation of 0.002) was introduced to the annual fishing mortality values so that there was some sotchasticity between iterations. Following the approach in the most recent benchmark stock assessment for the Deep 7 fishery, we used a time-varying ratio for the non-commercial catch (#TODO: add citation and ratio values). 
+The operating model was a single-species, single-sex, age-structured model conditioned on 'ōpakapaka life history parameters and historical fishery data trends from the Deep 7 complex. Historical data included 75 years of catch, CPUE, and size data from commercial and non-commercial fisheries, plus seven years of abundance indices and length composition data from the Bottomfish Fishery-Independent Survey in Hawaii (BFISH).
+The OM simulated population dynamics and generated data with observation error for a 100-year projection period. Fishing mortality time series were generated based on historical patterns: low values at fishery inception, increasing through the 1970s and remaining high until the late 1990s, then declining in the early 2000s and stabilizing through the end of the time series (@fig-F-timeseries). Annual fishing mortality values included stochastic variability (standard deviation of 0.002) to introduce realistic variation between iterations. Following the most recent Deep 7 benchmark stock assessment, we applied time-varying ratios for non-commercial catch: 1.94 from 1948-2003 and 1.09 for 2004-2049 (#TODO add citation for deep7 assessment). 
 
 ```{r}
 #| message: false
@@ -105,35 +103,9 @@ stockplotr::theme_noaa() +
 
 ```
 
-The last 25 years are considered "future years" because they represent possible future recruitment conditions that we want to test the EM's robustness against. We tested two future recruitment conditions, the first was a "normal" recruitment, assuming no changes in mean recruitment over time and the second was a "poor recruitment" scenario, which assumed a decline in mean recruitment by 40% in the future. 
+### Recruitment Deviations
 
-### Recruitment Deviation Time Series Generation
-
-We developed 200 stochastic recruitment deviation time series for use in the operating models to evaluate fishery management performance under different recruitment patterns. Two distinct recruitment scenarios were created: (1) normal future recruitment and (2) poor future recruitment, represented by a 40% decline in mean expected recruitment. Both scenarios had recruitment deviations generated from a standard normal distribution in log space for the first 75 years. 
-
-Deviations were bias corrected as follows:
-$$
-R_{dev}(y,i) = σ_R × ε(y,i) - \frac{{σ_R}^2}{2}
-$$
-
-
-where $R_{dev}(y,i)$ is the recruitment deviation for year y and iteration i, $ε(y,i) \sim N(0,1)$, and the bias correction term ${σ_R}^2$ ensures unbiased recruitment in expectation. $σ_R$ was 0.52 (#TODO: LH citation). 
-
-### Future Recruitment Condition
-
-#### Normal Recruitment 
-
-For the normal recruitment condition, 100 future recruitment deviations were generated assuming recruitment would continue following the same stochastic process as the final assessment years:
-
-$$
-R_{dev}(y,i) = σ_R × ε(y,i) - \frac{{σ_R}^2}{2}
-$$
-
-where $σ_R$ = 0.15, maintaining consistency with the variability observed in recent years.
-
-#### Declining Recruitment   
-
-To evaluate the robustness of management strategies under conditions of sustained recruitment failure, we developed a "poor recruitment" scenario characterized by a prolonged decline in recruitment success followed by a period of persistently low recruitment levels.
+The simulation framework was structured to evaluate estimation model performance under varying future conditions. The first 75 years of the 100-year simulation represented the historical period with known data patterns, while the final 25 years constituted "future years" designed to test the robustness of the estimation model against potential changes in recruitment dynamics. Two distinct recruitment scenarios were implemented for these future years to bracket plausible recruitment conditions: (1) a "normal" recruitment scenario that maintained historical mean recruitment levels with no systematic change over time, and (2) a "poor recruitment" scenario that imposed a 40% decline in mean recruitment relative to historical levels. This approach allowed us to assess whether survey sampling intensity affects the estimation model's ability to detect and respond to recruitment shifts that could significantly impact stock productivity and sustainable harvest levels. A total of 200 recruitment deviation time series were generated, 100 were independent, bias-corrected lognormal random deviates with a standard deviation ($σ_R$) of 0.52 for the entire 100 years, and the remaining 100 were the same for the first 75 years and then the last 25 years were calculated to drive a decline in recruitment.
 
 The recruitment decline scenario was structured as a two-phase process spanning 25 years. The first phase consisted of a 10-year gradual decline period, during which recruitment decreased from baseline levels to 60% of the historical mean. The annual decline rate (*r*) was calculated as:
 $$
@@ -189,19 +161,15 @@ scale_colour_manual(
 
 ```
 
-### Life History
-
-Growth was modeled using a von Bertanlanfy growth curve and natural mortality was assumed to be 0.135 and age-invariant. Weight-at-length relationship, maturity and fecundity. The stock-recruitment relationship was modeled with a Beverton-Holt relationship where steepness was fixed at 0.76 and $σ_R$ was 0.52.  
-
 ### Initial Fishing Mortality and Selectivity
 
-Initial fishing mortality was fixed at 0.012 for the commerical fishery and assumed to start at equilibrium for the non-commercial fishery. Logistic selectivity was modeled for the commercial and non-commercial fisheries and a dome-shaped double normal selectivity model was used for the research fishing survey (@fig-selex). 
+Initial fishing mortality was fixed at 0.012 for the commercial fishery and assumed to start at equilibrium for the non-commercial fishery. Logistic selectivity was modeled for the commercial and non-commercial fisheries and a dome-shaped double normal selectivity model was used for the research fishing survey (@fig-selex). 
 
 ```{r}
 #| warning: false
 #| message: false
 #| label: fig-selex
-#| fig-caption: "Selectivity functions used for the commercial (blue line), non-commercial (orange line), and survey (red line)."
+#| fig-cap: Selectivity functions used for the commercial (blue line), non-commercial (orange line), and survey (red line).
 rep <- r4ss::SS_output(dir = "../models/02_Opaka_BFISH_simulation_EM", verbose = F, printstats=FALSE)
 
 rep$sizeselex %>% 
@@ -298,9 +266,7 @@ Sampling error (variability in data sampled from the OM) and observation error s
 
 
 ## Estimation Model  
-Data generated from the OM were fit using a catch-at-age model in Stock Synthesis. All life history and fishery relationships were correctly specified as in the OM. The only difference in the EM from the OM was for the poor recruitment scenarios, a regime time block was added for the last 15 years. Without the regime, the model was unable to fit the persistant decline in recruitment and the relative errors in outputs were over exaggerated. When fitting the model, all parameters were fixed except for R~0~, the regime parameter for the poor recruitment scenarios, catchability for the commercial and survey fleets, and selectivity parameters for the commercial fishery and survey fleet.
-
-In total, 1,000 simulations were run using the Open Science Grid #TODO: add citation. Each simulation run involved generating the population dynamics based on the OM, with the given F and recruitment deviations timeseries, sampling data with error from the OM, and fitting those data in an EM. This process was done using the r package {ss3sim} #TODO add citation. 
+The only structural difference in the EM from the OM was that for the poor recruitment condition, a recruitment regime time block was introduced for the last 15 years. Without the regime, the model was unable to fit the persistant decline in recruitment and the relative errors in outputs were over exaggerated. When fitting the model, all parameters were fixed except for $R_0$, the regime parameter for the poor recruitment scenarios, catchability for the commercial and survey fleets, and selectivity parameters for the commercial fishery and survey fleet. All life history and fishery relationships were fixed at their true value (as specified in the OM).
 
 ## Performance Indices  
 To compare the bias and precision of each sampling strategy, we looked at median relative error (MRE) and median absolute relative error (MARE) between the OM and EM for spawning stock biomass (SSB), fishing mortality (F), age-0 recruitment, and reference points SSB/SSB~MSST~ and F/F~MSY~. 
@@ -607,7 +573,7 @@ When evaluating the performance of estimating stock status reference points, we 
 
 In this simulation, we found that if normal recruitment persists in the future, the sampling effort of the fishery independent survey does not impact our ability to estimate the biomass, fishing mortality, and stock status in general, but it does increase our uncertainty around those estimates. On the other hand, we found that if recruitment were to decline in the future and a regime-type shift occurred, the survey effort impacts our ability to estimate biomass, fishing mortality, and stock status and the uncertainty around those estimates as well. Particularly, if there is no fishery-independent survey, our ability to estimate key quantities deteriorates significantly.
 
-The poor recruitment scenario revealed critical thresholds for maintaining assessment reliability under challenging population conditions. High and intermediate survey effort scenarios (HSE and ISE) demonstrated comparable performance across all metrics, including median relative error (MRE), median absolute relative error (MARE), and the 95% confidence intervals of relative error. Lower effort scenarios (LSE and XLSE) maintained similar central tendency measures but exhibited substantially wider confidence intervals, indicating reduced precision in parameter estimates. This pattern illustrates how poor recruitment conditions amplify the negative consequences of reduced sampling effort, creating a compounding effect where assessment reliability deteriorates precisely when accurate population monitoring becomes most critical for management decisions. The performance degradation observed below intermediate effort levels suggests that survey coverage should be maintained between 550-630 grids to ensure adequate assessment quality for Opakapaka stock management, particularly given the potential for unexpected recruitment variability in this system.
+The poor recruitment scenario revealed critical thresholds for maintaining assessment reliability under challenging population conditions. High and intermediate survey effort scenarios (HSE and ISE) demonstrated comparable performance across all metrics, including median relative error (MRE), median absolute relative error (MARE), and the 95% confidence intervals of relative error. Lower effort scenarios (LSE and XLSE) maintained similar central tendency measures but exhibited substantially wider confidence intervals, indicating reduced precision in parameter estimates. This pattern illustrates how poor recruitment conditions amplify the negative consequences of reduced sampling effort, creating a compounding effect where assessment reliability deteriorates precisely when accurate population monitoring becomes most critical for management decisions. The performance degradation observed below intermediate effort levels suggests that survey coverage should be maintained between 550-630 grids to ensure adequate assessment quality for 'ōpakapaka stock management, particularly given the potential for unexpected recruitment variability in this system.
 
 One interesting finding was the stark contrast of the NSE scenario performances under the two recruitment conditions. The NSE scenario's performance suggests that in some cases, no survey data may be adequate if the fishery CPUE index is accurately tracking the population trends. Having one continuous data source of good quality may be preferable to shorter time series of data or very poor quality survey data. However, this is only true under the normal recruitment conditions and once poor recruitment was introduced the model performed far worse than the others in almost every metric. A major assumption of the NSE model is that the fishery data, particularly the CPUE and size data are accurately characterizing the full population. This is likely untrue, as fishers are knowledgeable about where and when to find larger fish and will likely be able to maintain a healthy catch even if the population is declining. Therefore, we should not assume that the fishery is an accurate, unbaised representation of what is actually happening in the population.  
 
