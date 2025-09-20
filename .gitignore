@@ -34,6 +34,7 @@
 !Inputs/*
 !*.qmd
 *.sif
+!Report/*
 # renv files
 !renv/settings.json
 !renv.lock
